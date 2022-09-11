@@ -1,0 +1,12 @@
+[package]
+name = "gnu-libjit"
+version = "0.9.0"
+edition = "2021"
+license = "GPL-2.0-only"
+homepage = "https://github.com/n8ta/gnu-libjit"
+repository = "https://github.com/n8ta/gnu-libjit"
+description = "A safe rust wrapper around the libjit just in time compiler"
+
+[dependencies]
+gnu-libjit-sys = { path = "../gnu-libjit-sys" }
+libc = "0.2"
