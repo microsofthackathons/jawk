@@ -71,9 +71,9 @@ pub enum Token {
     Eq,
     Semicolon,
     Column,
-    BinOp(BinOp),
-    MathOp(MathOp),
-    LogicalOp(LogicalOp),
+    BinOp(BinOp),         // < <= >= >
+    MathOp(MathOp),       // + - ^ %
+    LogicalOp(LogicalOp), // && ||
     Bang,
     String(String),
     Ident(String),

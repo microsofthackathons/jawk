@@ -70,6 +70,25 @@ fn test_against(interpreter: &str, prog: &str, file: &PathBuf) {
         return;
     }
 
+    // let mut ours_us = 0;
+    // let mut theirs_us = 0;
+    // for _ in 0..PERF_RUNS {
+    //     ours_us += test_once("./target/release/jawk", prog, file).1.as_micros();
+    //     theirs_us += test_once(interpreter, prog, file).1.as_micros();
+    // }
+    //
+    // let ours_us_avg = Duration::from_micros((ours_us / 10) as u64).as_micros() / PERF_RUNS;
+    // let theirs_us_avg = Duration::from_micros((theirs_us / 10) as u64).as_micros() / PERF_RUNS;
+    //
+    // println!(
+    //     "{}us jawk vs {}us {}",
+    //     ours_us_avg, theirs_us_avg, interpreter
+    // );
+    //
+    // if ours_us_avg < 2000 && theirs_us_avg < 2000 {
+    //     return;
+    // }
+    //
     // assert!(
     //     ours_us < theirs_us,
     //     "{} was faster! {}us vs {}us avg for 10 runs",
@@ -99,10 +118,10 @@ fn test_it<S: AsRef<str>>(prog: &str, file: S, _expected_output: &str, _status: 
         string_in, string_out
     );
 
-    test_against("gawk", prog, &file_path);
+    test_against("awk", prog, &file_path);
     test_against("mawk", prog, &file_path);
-    // test_against("goawk", prog, &file_path);
-    // test_against("onetrueawk", prog, &file_path);
+    test_against("goawk", prog, &file_path);
+    test_against("onetrueawk", prog, &file_path);
 }
 
 macro_rules! test {
@@ -122,6 +141,27 @@ test!(
     "BEGIN { print (x = x + 1); }",
     ONE_LINE,
     "1\n",
+    0
+);
+test!(
+    test_simple_exponential,
+    "BEGIN { print (x = 2 ^ 2); }",
+    ONE_LINE,
+    "4\n",
+    0
+);
+test!(
+    test_simple_exponential_order_op_pre,
+    "BEGIN { print (x = 3 * 2 ^ 2); }",
+    ONE_LINE,
+    "12\n",
+    0
+);
+test!(
+    test_simple_exponential_order_op_post,
+    "BEGIN { print (x = 2 ^ 2 * 3); }",
+    ONE_LINE,
+    "12\n",
     0
 );
 test!(
@@ -810,4 +850,12 @@ test!(
     NUMERIC_STRING,
     "-1\n",
     0
+);
+
+test!(
+    test_mod_2,
+    "BEGIN { print (3 % 2) }",
+    NUMERIC_STRING,
+    ".",
+    1
 );
