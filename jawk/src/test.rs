@@ -125,6 +125,27 @@ test!(
     0
 );
 test!(
+    test_simple_exponential,
+    "BEGIN { print (x = 2 ^ 2); }",
+    ONE_LINE,
+    "4\n",
+    0
+);
+test!(
+    test_simple_exponential_order_op_pre,
+    "BEGIN { print (x = 3 * 2 ^ 2); }",
+    ONE_LINE,
+    "12\n",
+    0
+);
+test!(
+    test_simple_exponential_order_op_post,
+    "BEGIN { print (x = 2 ^ 2 * 3); }",
+    ONE_LINE,
+    "12\n",
+    0
+);
+test!(
     test_e2e_begin_end,
     "BEGIN { print 1; } END { print 3; } END { print 4; }",
     ONE_LINE,

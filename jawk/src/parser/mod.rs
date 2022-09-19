@@ -371,7 +371,7 @@ impl Parser {
                 Token::MathOp(MathOp::Modulus) => MathOp::Modulus,
                 _ => panic!("Parser bug in comparison function"),
             };
-            expr = Expr::MathOp(Box::new(expr), op, Box::new(self.column())).into()
+            expr = Expr::MathOp(Box::new(expr), op, Box::new(self.exp())).into()
         }
         expr
     }
