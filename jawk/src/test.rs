@@ -100,9 +100,9 @@ fn test_it<S: AsRef<str>>(prog: &str, file: S, _expected_output: &str, _status: 
     );
 
     test_against("awk", prog, &file_path);
-    // test_against("mawk", prog, &file_path);
-    // test_against("goawk", prog, &file_path);
-    // test_against("onetrueawk", prog, &file_path);
+    test_against("mawk", prog, &file_path);
+    test_against("goawk", prog, &file_path);
+    test_against("onetrueawk", prog, &file_path);
 }
 
 macro_rules! test {
