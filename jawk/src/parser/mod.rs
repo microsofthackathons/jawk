@@ -364,13 +364,15 @@ impl Parser {
 
     fn term(&mut self) -> TypedExpr {
         let mut expr = self.column();
-        while self.matches(vec![TokenType::Star, TokenType::Slash]) {
+        while self.matches(vec![TokenType::Star, TokenType::Slash, TokenType::Modulo]) {
             let op = match self.previous().unwrap() {
                 Token::MathOp(MathOp::Star) => MathOp::Star,
                 Token::MathOp(MathOp::Slash) => MathOp::Slash,
+                Token::MathOp(MathOp::Modulus) => MathOp::Modulus,
                 _ => panic!("Parser bug in comparison function"),
             };
-            expr = Expr::MathOp(Box::new(expr), op, Box::new(self.column())).into()
+            expr = Expr::MathOp(Box::new(expr), op,
+                                Box::new(self.column())).into()
         }
         expr
     }

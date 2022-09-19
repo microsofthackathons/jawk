@@ -136,9 +136,9 @@ impl Lexer {
             '$' => self.add_token(Token::Column),
             '-' => {
                 if self.matches('=') {
-                    self.add_token(Token::InplaceEq(MathOp::Minus));
+                    self.add_token(Token::InplaceEq(MathOp::Minus)); // -=
                 } else {
-                    self.add_token(Token::MathOp(MathOp::Minus))
+                    self.add_token(Token::MathOp(MathOp::Minus)) // -
                 }
             }
             '+' => {
@@ -202,7 +202,7 @@ impl Lexer {
                 if self.matches('=') {
                     self.add_token(Token::InplaceEq(MathOp::Modulus));
                 } else {
-                    return Err(format!("Expected an = after '%'"));
+                    self.add_token(Token::MathOp(MathOp::Modulus));
                 }
             }
             '^' => {

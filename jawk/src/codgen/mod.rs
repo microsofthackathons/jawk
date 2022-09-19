@@ -465,7 +465,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                     self.drop_if_str(&right, right_expr.typ);
                     right = new_right;
                 }
-                let res = match op {
+                let result = match op {
                     MathOp::Minus => self.function.insn_sub(&left.float, &right.float),
                     MathOp::Plus => self.function.insn_add(&left.float, &right.float),
                     MathOp::Slash => self.function.insn_div(&left.float, &right.float),
@@ -473,7 +473,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                     MathOp::Modulus => self.function.insn_rem(&left.float, &right.float),
                     MathOp::Exponent => self.function.insn_pow(&left.float, &right.float),
                 };
-                ValueT::new(zero, res, self.zero_ptr.clone())
+                ValueT::new(zero, result, self.zero_ptr.clone())
             }
             Expr::BinOp(left_expr, op, right_expr) => {
                 let left = self.compile_expr(left_expr);
