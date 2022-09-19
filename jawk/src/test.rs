@@ -99,8 +99,8 @@ fn test_it<S: AsRef<str>>(prog: &str, file: S, _expected_output: &str, _status: 
         string_in, string_out
     );
 
-    test_against("gawk", prog, &file_path);
-    test_against("mawk", prog, &file_path);
+    test_against("awk", prog, &file_path);
+    // test_against("mawk", prog, &file_path);
     // test_against("goawk", prog, &file_path);
     // test_against("onetrueawk", prog, &file_path);
 }

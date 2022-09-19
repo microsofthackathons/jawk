@@ -209,7 +209,7 @@ impl Lexer {
                 if self.matches('=') {
                     self.add_token(Token::InplaceEq(MathOp::Exponent));
                 } else {
-                    return Err(format!("Expected an = after '^'"));
+                    self.add_token(Token::MathOp(MathOp::Exponent));
                 }
             }
             '/' => {
