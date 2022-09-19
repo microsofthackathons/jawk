@@ -357,7 +357,25 @@ impl Parser {
                 Token::MathOp(MathOp::Plus) => MathOp::Plus,
                 _ => panic!("Parser bug in comparison function"),
             };
-            expr = Expr::MathOp(Box::new(expr), op, Box::new(self.term())).into()
+            if let Expr::Variable(name) = expr.expr.clone() {
+                if op == MathOp::Plus && self.peek().ttype() == TokenType::Plus {
+                    self.advance();
+                    // a + 1 
+                    let increment = Expr::MathOp(Box::new(expr), op, Box::new(Expr::NumberF64(1.0).into())).into();
+                    let assign = Expr::Assign(name, Box::new(increment)).into(); // a = a + 1
+                    expr = Expr::MathOp(Box::new(assign), MathOp::Minus, Box::new(Expr::NumberF64(1.0).into())).into(); // a - 1 
+                }
+                else if op == MathOp::Minus && self.peek().ttype() == TokenType::Minus {
+                    self.advance();
+                    let decrement = Expr::MathOp(Box::new(expr), op, Box::new(Expr::NumberF64(1.0).into())).into();
+                    let assign = Expr::Assign(name, Box::new(decrement)).into();
+                    expr = Expr::MathOp(Box::new(assign), MathOp::Plus, Box::new(Expr::NumberF64(1.0).into())).into(); 
+                } else {
+                    expr = Expr::MathOp(Box::new(expr), op, Box::new(self.comparison())).into();
+                }
+            } else {
+                expr = Expr::MathOp(Box::new(expr), op, Box::new(self.comparison())).into();
+            }
         }
         expr
     }
