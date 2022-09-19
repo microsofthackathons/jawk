@@ -39,11 +39,9 @@ cargo run -- --debug 'BEGIN { print "this will print debug info including the AS
 8. Missing Operators
    - Ternary
    - pre/post inc/dec a++ --b
-   - exponential a^b
    - !logical_not
    - unary +a -b
    - expr in array a in b
-   - modulus
 9. Parsing / Lexing negative numbers
 10. ARGV / ARGC and other ENV vars
 11. Pattern Ranges 
