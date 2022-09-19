@@ -43,6 +43,14 @@ const PERF_RUNS: u128 = 3;
 fn test_against(interpreter: &str, prog: &str, file: &PathBuf) {
     // Run jawk against some other awk 10 times (interleaved) and comapre timing
 
+    let ours = test_once("./target/release/jawk", prog, file).0;
+    let output = test_once(interpreter, prog, file).0;
+    assert_eq!(
+        ours, output,
+        "LEFT jawk, RIGHT {} stdout didnt match for {}",
+        interpreter, interpreter
+    );
+
     // let mut ours_us = 0;
     // let mut theirs_us = 0;
     // for _ in 0..PERF_RUNS {
@@ -92,9 +100,9 @@ fn test_it<S: AsRef<str>>(prog: &str, file: S, _expected_output: &str, _status: 
     );
 
     test_against("awk", prog, &file_path);
-    test_against("mawk", prog, &file_path);
-    test_against("goawk", prog, &file_path);
-    test_against("onetrueawk", prog, &file_path);
+    // test_against("mawk", prog, &file_path);
+    // test_against("goawk", prog, &file_path);
+    // test_against("onetrueawk", prog, &file_path);
 }
 
 macro_rules! test {
