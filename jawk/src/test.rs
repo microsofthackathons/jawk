@@ -99,8 +99,8 @@ fn test_it<S: AsRef<str>>(prog: &str, file: S, _expected_output: &str, _status: 
         string_in, string_out
     );
 
-    test_against("gawk", prog, &file_path);
-    test_against("mawk", prog, &file_path);
+    test_against("awk", prog, &file_path);
+    // test_against("mawk", prog, &file_path);
     // test_against("goawk", prog, &file_path);
     // test_against("onetrueawk", prog, &file_path);
 }
@@ -122,6 +122,27 @@ test!(
     "BEGIN { print (x = x + 1); }",
     ONE_LINE,
     "1\n",
+    0
+);
+test!(
+    test_simple_exponential,
+    "BEGIN { print (x = 2 ^ 2); }",
+    ONE_LINE,
+    "4\n",
+    0
+);
+test!(
+    test_simple_exponential_order_op_pre,
+    "BEGIN { print (x = 3 * 2 ^ 2); }",
+    ONE_LINE,
+    "12\n",
+    0
+);
+test!(
+    test_simple_exponential_order_op_post,
+    "BEGIN { print (x = 2 ^ 2 * 3); }",
+    ONE_LINE,
+    "12\n",
     0
 );
 test!(

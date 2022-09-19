@@ -361,9 +361,9 @@ impl Parser {
         }
         expr
     }
-
+    //1 * 3
     fn term(&mut self) -> TypedExpr {
-        let mut expr = self.column();
+        let mut expr = self.exp();
         while self.matches(vec![TokenType::Star, TokenType::Slash, TokenType::Modulo]) {
             let op = match self.previous().unwrap() {
                 Token::MathOp(MathOp::Star) => MathOp::Star,
@@ -371,8 +371,16 @@ impl Parser {
                 Token::MathOp(MathOp::Modulus) => MathOp::Modulus,
                 _ => panic!("Parser bug in comparison function"),
             };
-            expr = Expr::MathOp(Box::new(expr), op,
-                                Box::new(self.column())).into()
+            expr = Expr::MathOp(Box::new(expr), op, Box::new(self.exp())).into()
+        }
+        expr
+    }
+
+    fn exp(&mut self) -> TypedExpr {
+        let mut expr = self.column();
+        while self.matches(vec![TokenType::Exponent]) {
+            let op = MathOp::Exponent;
+            expr = Expr::MathOp(Box::new(expr), op, Box::new(self.column())).into()
         }
         expr
     }
@@ -529,6 +537,41 @@ fn test_ast_assign() {
     assert_eq!(
         parse(lex("{abc = 2.0; }").unwrap()),
         Program::new_action_only(stmt)
+    );
+}
+
+#[test]
+fn test_mathop_exponent() {
+    use crate::lexer::lex;
+
+    assert_eq!(
+        parse(lex("{2 ^ 2;}").unwrap()),
+        Program::new(
+            vec![],
+            vec![],
+            vec![PatternAction::new_action_only(Stmt::Expr(mathop!(
+                bnum!(2.0),
+                MathOp::Exponent,
+                bnum!(2.0)
+            )))]
+        )
+    );
+}
+
+#[test]
+fn test_mathop_exponent_2() {
+    use crate::lexer::lex;
+    let right = Box::new(num!(3.0));
+    let left = Box::new(texpr!(Expr::MathOp(
+        Box::new(num!(2.0)),
+        MathOp::Exponent,
+        Box::new(num!(2.0))
+    )));
+    let expo = Stmt::Expr(texpr!(Expr::MathOp(left, MathOp::Star, right)));
+
+    assert_eq!(
+        parse(lex("{2 ^ 2 * 3;}").unwrap()),
+        Program::new_action_only(expo)
     );
 }
 
