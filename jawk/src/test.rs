@@ -43,33 +43,6 @@ const PERF_RUNS: u128 = 3;
 fn test_against(interpreter: &str, prog: &str, file: &PathBuf) {
     // Run jawk against some other awk 10 times (interleaved) and comapre timing
 
-    let ours = test_once("./target/release/jawk", prog, file).0;
-    let output = test_once(interpreter, prog, file).0;
-    assert_eq!(
-        ours, output,
-        "LEFT jawk, RIGHT {} stdout didnt match for {}",
-        interpreter, interpreter
-    );
-
-    let mut ours_us = 0;
-    let mut theirs_us = 0;
-    for _ in 0..PERF_RUNS {
-        ours_us += test_once("./target/release/jawk", prog, file).1.as_micros();
-        theirs_us += test_once(interpreter, prog, file).1.as_micros();
-    }
-
-    let ours_us_avg = Duration::from_micros((ours_us / 10) as u64).as_micros() / PERF_RUNS;
-    let theirs_us_avg = Duration::from_micros((theirs_us / 10) as u64).as_micros() / PERF_RUNS;
-
-    println!(
-        "{}us jawk vs {}us {}",
-        ours_us_avg, theirs_us_avg, interpreter
-    );
-
-    if ours_us_avg < 2000 && theirs_us_avg < 2000 {
-        return;
-    }
-
     // let mut ours_us = 0;
     // let mut theirs_us = 0;
     // for _ in 0..PERF_RUNS {
