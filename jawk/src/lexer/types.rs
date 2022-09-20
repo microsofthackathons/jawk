@@ -95,6 +95,8 @@ pub enum Token {
     For,
     Do,
     InplaceEq(MathOp),
+    Question,
+    Colon,
 }
 
 #[derive(Debug, Clone, PartialOrd, PartialEq, Hash, Eq, Ord)]
@@ -139,6 +141,8 @@ pub enum TokenType {
     MatchedBy,
     NotMatchedBy,
     InplaceAssign,
+    Question,
+    Colon,
 }
 
 impl Token {
@@ -191,6 +195,8 @@ impl Token {
             Token::While => TokenType::While,
             Token::For => TokenType::For,
             Token::Do => TokenType::Do,
+            Token::Question => TokenType::Question,
+            Token::Colon => TokenType::Colon,
         }
     }
 }
@@ -233,6 +239,8 @@ impl TokenType {
             TokenType::Ident => "Ident",
             TokenType::For => "For",
             TokenType::Do => "Do",
+            TokenType::Question => "Question",
+            TokenType::Colon => "Colon",
             TokenType::MatchedBy => "~",
             TokenType::NotMatchedBy => "~!",
             TokenType::Modulo => "%",
