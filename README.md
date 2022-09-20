@@ -42,15 +42,11 @@ cargo run -- --debug 'BEGIN { print "this will print debug info including the AS
 7. Redirect output to file
    - close() function
 8. Missing Operators
-   - Ternary
-   - pre/post inc/dec a++ --b
-   - !logical_not
-   - unary +a -b
+   - !logical_not, unary +a -b
    - expr in array a in b
 9. Parsing / Lexing negative numbers
 10. ARGV / ARGC and other ENV vars
 11. Pattern Ranges 
-12. Support for unicode in the string comparisons (subroutines.rs)
 13. Parser need to be able to print the where it was when shit went wrong and what happened
 14. Do we actually need numeric strings???
 15. The columns runtime needs to be much faster and lazier.
