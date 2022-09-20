@@ -37,18 +37,20 @@ fn long_number_file() -> String {
     }
     string
 }
-
-const PERF_RUNS: u128 = 3;
-
 fn test_against(interpreter: &str, prog: &str, file: &PathBuf) {
     match std::process::Command::new(interpreter).output() {
         Ok(_) => {}
         Err(err) => return, // this interpreter doesn't exist
     }
-    let ours = test_once("./target/debug/jawk", prog, file).0;
+    let mut ast = transform(parse(lex(prog).unwrap()));
+    analyze(&mut ast);
+
+    let files = vec![file.to_str().unwrap().to_string()];
+    let ours = compile_and_capture(ast, files.as_slice()).unwrap();
+
     let output = test_once(interpreter, prog, file).0;
     assert_eq!(
-        ours, output,
+        ours.output(), output,
         "LEFT jawk, RIGHT {} stdout didnt match for {}",
         interpreter, interpreter
     );
@@ -449,9 +451,9 @@ test!(
 );
 test!(
     test_long_loop,
-    "{ x = 0; while (x<500) { x = x + 1; } print x; }",
+    "{ x = 0; while (x<50) { x = x + 1; } print x; }",
     ONE_LINE,
-    "500\n",
+    "50\n",
     0
 );
 test!(
@@ -775,8 +777,8 @@ test!(
     0
 );
 
-test!(test_loop_concat_long1, "BEGIN {a = \"\";        b = \"\";        x = 0;        while (x < 10000) { a = a \"a\";                b = b \"a\";                x = x + 1;                if (a > b) {print \"a is not eq to b\";                }}print x;        print \"done\";}", ONE_LINE, ".", 0);
-test!(test_loop_concat_long2, "BEGIN {a = \"\";        b = \"\";        x = 0;        while (x < 10000) { a = a \"a\";                b = b \"a\";                x = x + 1;                if (a != b) {print \"a is not eq to b\";                }}print x;        print \"done\";}", ONE_LINE, ".", 0);
+test!(test_loop_concat_long1, "BEGIN {a = \"\";        b = \"\";        x = 0;        while (x < 100) { a = a \"a\";                b = b \"a\";                x = x + 1;                if (a > b) {print \"a is not eq to b\";                }}print x;        print \"done\";}", ONE_LINE, ".", 0);
+test!(test_loop_concat_long2, "BEGIN {a = \"\";        b = \"\";        x = 0;        while (x < 100) { a = a \"a\";                b = b \"a\";                x = x + 1;                if (a != b) {print \"a is not eq to b\";                }}print x;        print \"done\";}", ONE_LINE, ".", 0);
 
 test!(test_pattern_only_1_4, "$1 == $4", NUMBERS, ".", 0);
 
