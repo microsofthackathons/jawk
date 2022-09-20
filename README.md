@@ -12,14 +12,19 @@ sudo apt-get install autoconf pkg-config libtool flex bison automake make g++
 cargo build --release
 ``` 
 
+### Mac:
+```
+brew install autoconf automake libtool gcc
+```
+
 ### Windows
 For now you need to use WSL and follow the ubuntu instructions
 
 ### General:
 ```
-cargo build --release
-./target/release/jawk '{ print "Some awk program!}" }' 
-./target/release/jawk -f run.awk some_file.txt
+cargo build
+./target/debug/jawk '{ print "Some awk program!}" }' 
+./target/debug/jawk -f run.awk some_file.txt
 cargo run -- --debug 'BEGIN { print "this will print debug info including the AST and runtime calls" }'
 ```
 
@@ -66,6 +71,5 @@ Install other awks to test against (they should be on your path with these exact
 Tests look in ./target/release/jawk for a binary to do perf comparisons so you need to do a release build to run the tests.
 
 ```
-cargo build --release
 cargo test
 ```
