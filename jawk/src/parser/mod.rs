@@ -81,12 +81,21 @@ impl Parser {
         Some(self.tokens[self.current - 1].clone())
     }
 
-    fn peek(&self) -> Token {
-        return self.tokens[self.current].clone();
+    fn peek_at(&self, idx: usize) -> Token {
+        if let Some(t) = self.tokens.get(idx) {
+            t.clone()
+        } else {
+            Token::EOF
+        }
     }
-
+    fn peek(&self) -> Token {
+        self.peek_at(self.current)
+    }
     fn peek_next(&self) -> Token {
-        return self.tokens[self.current + 1].clone();
+        self.peek_at(self.current+1)
+    }
+    fn peek_next_next(&self) -> Token {
+        self.peek_at(self.current+2)
     }
 
     fn is_at_end(&self) -> bool {
