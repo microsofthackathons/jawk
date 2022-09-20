@@ -834,7 +834,20 @@ test!(
     "-1\n",
     0
 );
-
+test!(
+    test_exp_post_increment,
+    "BEGIN { a = 3; print 2 ^ a++; print a }",
+    NUMERIC_STRING,
+    "8\n4\n",
+    1
+);
+test!(
+    test_post_increment_exp,
+    "BEGIN { a = 3; print a++ ^ 2; print a}",
+    NUMERIC_STRING,
+    "9\n4\n",
+    1
+);
 test!(
     test_mod_2,
     "BEGIN { print (3 % 2) }",
