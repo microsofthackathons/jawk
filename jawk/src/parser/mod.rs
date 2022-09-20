@@ -377,11 +377,45 @@ impl Parser {
     }
 
     fn exp(&mut self) -> TypedExpr {
-        let mut expr = self.column();
+        let mut expr = self.unary();
         while self.matches(vec![TokenType::Exponent]) {
             let op = MathOp::Exponent;
-            expr = Expr::MathOp(Box::new(expr), op, Box::new(self.column())).into()
+            expr = Expr::MathOp(Box::new(expr), op, Box::new(self.unary())).into()
         }
+        expr
+    }
+
+    fn unary(&mut self) -> TypedExpr {
+        // let mut expr = self.column();
+        // let prev_op = self.previous().unwrap();
+
+        // println!("inside unary");
+        let expr;
+
+        if self.matches(vec![TokenType::Minus, TokenType::Plus])
+            && !self.matches(vec![TokenType::Minus, TokenType::Plus])
+        {
+            let prev_op = self.previous().unwrap();
+            // +, a
+            // -, someVar
+
+            let op = match prev_op {
+                Token::MathOp(MathOp::Plus) => MathOp::Plus,
+                Token::MathOp(MathOp::Minus) => MathOp::Minus,
+                _ => panic!("Parser bug in unary, should not observe not +/-"),
+            };
+            // println!("inside if-else");
+            let lhs = TypedExpr::new_num(Expr::NumberF64(0.0));
+            expr = Expr::MathOp(Box::new(lhs), op, Box::new(self.column())).into();
+        } else if self.matches(vec![TokenType::Bang]) {
+            // expr = self.column();
+            let op = BinOp::BangEq;
+            let lhs = TypedExpr::new_num(Expr::NumberF64(1.0));
+            expr = Expr::BinOp(Box::new(lhs), op, Box::new(self.column())).into();
+        } else {
+            expr = self.column();
+        }
+
         expr
     }
 
