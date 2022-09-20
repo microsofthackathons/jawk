@@ -849,6 +849,35 @@ test!(
     1
 );
 test!(
+    test_pre_increment,
+    "BEGIN { a = 3; print ++a; print a}",
+    NUMERIC_STRING,
+    "4\n4\n",
+    1
+);
+test!(
+    test_pre_decrement,
+    "BEGIN { a = 3; print --a; print a}",
+    NUMERIC_STRING,
+    "2\n2\n",
+    1
+);
+test!(
+    test_post_pre_increment,
+    "BEGIN { a = 3; print a++ + ++a; print a}",
+    NUMERIC_STRING,
+    "7\n5\n",
+    1
+);
+
+test!(
+    test_post_pre_decrement,
+    "BEGIN { a = 3; print a-- + --a; print a}",
+    NUMERIC_STRING,
+    "4\n1\n",
+    1
+);
+test!(
     test_mod_2,
     "BEGIN { print (3 % 2) }",
     NUMERIC_STRING,
