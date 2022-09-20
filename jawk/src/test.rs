@@ -50,9 +50,11 @@ fn test_against(interpreter: &str, prog: &str, file: &PathBuf) {
 
     let output = test_once(interpreter, prog, file).0;
     assert_eq!(
-        ours.output(), output,
+        ours.output(),
+        output,
         "LEFT jawk, RIGHT {} stdout didnt match for {}",
-        interpreter, interpreter
+        interpreter,
+        interpreter
     );
 
     // let mut ours_us = 0;
