@@ -909,3 +909,18 @@ test!(
     "2\n",
     1
 );
+
+
+test!(
+    test_ternary_nested,
+    "BEGIN { x = 2; y = 3; print x ? ( y ? \"true\" : 3 ) : 4 }",
+    ONE_LINE,
+    "true\n",
+    0
+);
+
+
+test!(test_ternary_nested_flat1, "BEGIN { x = 3; y = 0; print x ? y ? 33 : 44 : 55; }", ONE_LINE, "44\n", 0);
+test!(test_ternary_nested_flat2, "BEGIN { x = 0; y = 0; print x ? y ? 33 : 44 : 55; }", ONE_LINE, "55\n", 0);
+test!(test_ternary_nested_flat3, "BEGIN { x = 0; z = 3; print x ? y : z ? 2 : 3 }", ONE_LINE, "2\n", 0);
+test!(test_ternary_nested_flat4, "BEGIN { x = 0; z = 3; y = 5; print (x ? 0 : 2) ? y : z ? 2 : 3 }", ONE_LINE, "5\n", 0);
