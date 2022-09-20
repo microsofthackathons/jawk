@@ -92,7 +92,12 @@ impl TypeAnalysis {
                 self.map = self.map.insert(var.clone(), value.typ).0;
                 expr.typ = value.typ;
             }
-
+	    Expr::Ternary(cond, expr1, expr2) => {
+                self.analyze_expr(cond);
+                self.analyze_expr(expr1);
+                self.analyze_expr(expr2);
+		expr.typ = Self::merge_types(&expr1.typ, &expr2.typ);
+	    }
             Expr::Variable(var) => {
                 if let Some(typ) = self.map.get(var) {
                     expr.typ = *typ;

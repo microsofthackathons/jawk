@@ -884,3 +884,24 @@ test!(
     ".",
     1
 );
+test!(
+    test_ternary_false,
+    "BEGIN { print 0 ? 1 : 2 }",
+    NUMERIC_STRING,
+    "2\n",
+    1
+);
+test!(
+    test_ternary_true,
+    "BEGIN { print 1 ? 1 : 2 }",
+    NUMERIC_STRING,
+    "1\n",
+    1
+);
+test!(
+    test_ternary_arith,
+    "BEGIN { print 1 ? 1+1 : 2+2 }",
+    NUMERIC_STRING,
+    "2\n",
+    1
+);

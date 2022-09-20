@@ -261,7 +261,7 @@ impl Parser {
     }
 
     fn assignment(&mut self) -> TypedExpr {
-        let lhs = self.logical_or();
+        let lhs = self.ternary();
         if let Expr::Variable(var) = &lhs.expr {
             let var = var.clone();
             if self.matches(vec![TokenType::Eq]) {
@@ -283,6 +283,17 @@ impl Parser {
             }
         }
         lhs
+    }
+
+    fn ternary (&mut self) -> TypedExpr {
+	let lhs = self.logical_or();
+        if self.matches(vec![TokenType::Question]) {
+	    let expr1 = self.logical_or();
+	    self.consume(TokenType::Colon, "Expected a colon after question mark in a ternary!");
+	    let expr2 = self.logical_or();
+	    return TypedExpr::new_var(Expr::Ternary(Box::new(lhs), Box::new(expr1), Box::new(expr2)));
+	}
+	lhs
     }
 
     fn logical_or(&mut self) -> TypedExpr {
@@ -350,6 +361,8 @@ impl Parser {
             TokenType::RightBrace,
             TokenType::RightParen,
             TokenType::LeftBrace,
+            TokenType::Question,
+            TokenType::Colon,
         ];
         while !self.is_at_end() && !not_these.contains(&self.peek().ttype()) {
             if let Expr::Concatenation(vals) = &mut expr.expr {

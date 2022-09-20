@@ -223,6 +223,8 @@ impl Lexer {
                     self.add_token(Token::MathOp(MathOp::Slash));
                 }
             }
+	    '?' => self.add_token(Token::Question),
+	    ':' => self.add_token(Token::Colon),
             '{' => self.add_token(Token::LeftBrace),
             '}' => self.add_token(Token::RightBrace),
             '(' => self.add_token(Token::LeftParen),

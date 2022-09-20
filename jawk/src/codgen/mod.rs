@@ -642,6 +642,30 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 let compiled = self.compile_exprs_to_string(vars);
                 self.concat_values(&compiled)
             }
+	    Expr::Ternary(cond, expr1, expr2) => {
+
+		let mut done_lbl = Label::new();
+		let mut truthy_lbl = Label::new();
+
+		let result = self.compile_expr(cond);
+		let bool_value = self.truthy_ret_integer(&result, cond.typ);
+
+		self.function.insn_branch_if(&bool_value, &mut truthy_lbl);
+
+		let falsy_result = self.compile_expr(expr2);
+		self.store(&self.binop_scratch.clone(), &falsy_result);
+		self.function.insn_branch(&mut done_lbl);
+
+                self.function.insn_label(&mut truthy_lbl);
+
+		let truthy_result = self.compile_expr(expr1);
+		self.store(&self.binop_scratch.clone(), &truthy_result);
+
+                self.function.insn_label(&mut done_lbl);
+
+		self.load(&self.binop_scratch.clone())
+
+	    }
         }
     }
 
