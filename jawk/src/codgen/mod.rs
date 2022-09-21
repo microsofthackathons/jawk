@@ -207,18 +207,13 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
         if typ == AwkT::String {
             return value.pointer.clone();
         }
-
         let mut done_lbl = Label::new();
-        self.function
-            .insn_store(&self.binop_scratch.pointer, &value.pointer);
+        self.function.insn_store(&self.binop_scratch.pointer, &value.pointer);
         let is_string = self.function.insn_eq(&value.tag, &self.string_tag);
         self.function.insn_branch_if(&is_string, &mut done_lbl);
 
-        let new_string = self
-            .runtime
-            .number_to_string(&mut self.function, value.float.clone());
-        self.function
-            .insn_store(&self.binop_scratch.pointer, &new_string);
+        let new_string = self.runtime.number_to_string(&mut self.function, value.float.clone());
+        self.function.insn_store(&self.binop_scratch.pointer, &new_string);
 
         self.function.insn_label(&mut done_lbl);
         let ptr = self.function.insn_load(&self.binop_scratch.pointer);
@@ -336,21 +331,18 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 // Optimize print based on static knowledge of type
                 match expr.typ {
                     AwkT::String => {
-                        self.runtime
-                            .print_string(&mut self.function, val.pointer.clone());
+                        self.runtime.print_string(&mut self.function, val.pointer.clone());
+                        self.drop(&val.pointer);
                     }
                     AwkT::Float => {
                         self.runtime.print_float(&mut self.function, val.float);
-                        return;
                     }
                     AwkT::Variable => {
                         let str = self.to_string(&val, expr.typ);
                         self.runtime.print_string(&mut self.function, str.clone());
                         self.runtime.free_string(&mut self.function, str);
-                        return;
                     }
                 }
-                self.drop_if_str(&val, expr.typ);
             }
             Stmt::Group(group) => {
                 for group in group {
@@ -387,8 +379,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 let test_value = self.compile_expr(test);
                 let bool_value = self.truthy_ret_integer(&test_value, test.typ);
                 self.drop_if_str(&test_value, test.typ);
-                self.function
-                    .insn_branch_if_not(&bool_value, &mut done_label);
+                self.function.insn_branch_if_not(&bool_value, &mut done_label);
                 self.compile_stmt(body);
                 self.function.insn_branch(&mut test_label);
                 self.function.insn_label(&mut done_label);
@@ -444,34 +435,20 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 // Convert left and right to floats if needed and perform the MathOp
                 let mut left = self.compile_expr(left_expr);
                 let mut right = self.compile_expr(right_expr);
-                let zero = self.float_tag();
-
-                if AwkT::Float != left_expr.typ {
-                    let new_left = ValueT::new(
-                        zero.clone(),
-                        self.to_float(&left, left_expr.typ),
-                        self.zero_ptr.clone(),
-                    );
-                    self.drop_if_str(&left, left_expr.typ);
-                    left = new_left;
-                }
-                if AwkT::Float != right_expr.typ {
-                    let new_right = ValueT::new(
-                        zero.clone(),
-                        self.to_float(&right, right_expr.typ),
-                        self.zero_ptr.clone(),
-                    );
-                    self.drop_if_str(&right, right_expr.typ);
-                    right = new_right;
-                }
+                let left_float = self.to_float(&left, left_expr.typ);
+                let right_float = self.to_float(&right, right_expr.typ);
                 let result = match op {
-                    MathOp::Minus => self.function.insn_sub(&left.float, &right.float),
-                    MathOp::Plus => self.function.insn_add(&left.float, &right.float),
-                    MathOp::Slash => self.function.insn_div(&left.float, &right.float),
-                    MathOp::Star => self.function.insn_mult(&left.float, &right.float),
-                    MathOp::Modulus => self.function.insn_rem(&left.float, &right.float),
-                    MathOp::Exponent => self.function.insn_pow(&left.float, &right.float),
+                    MathOp::Minus => self.function.insn_sub(&left_float, &right_float),
+                    MathOp::Plus => self.function.insn_add(&left_float, &right_float),
+                    MathOp::Slash => self.function.insn_div(&left_float, &right_float),
+                    MathOp::Star => self.function.insn_mult(&left_float, &right_float),
+                    MathOp::Modulus => self.function.insn_rem(&left_float, &right_float),
+                    MathOp::Exponent => self.function.insn_pow(&left_float, &right_float),
                 };
+                self.drop_if_str(&left, left_expr.typ);
+                self.drop_if_str(&right, right_expr.typ);
+
+                let zero = self.float_tag();
                 ValueT::new(zero, result, self.zero_ptr.clone())
             }
             Expr::BinOp(left_expr, op, right_expr) => {
