@@ -4,24 +4,34 @@ use crate::lexer::BinOp;
 use crate::runtime::Runtime;
 use gnu_libjit::{Context, Function, Value};
 use std::ffi::c_void;
+use std::fmt::{Write as FmtWrite};
+use std::io::{BufWriter, StdoutLock, Write};
 use std::rc::Rc;
 
 // Live runtime used by most programs.
 // A pointer to the runtime data is provided for all calls but only used for some.
 // Its mainly here for the test runtime.
 
-pub extern "C" fn print_string(_data: *mut c_void, value: *mut String) {
+pub extern "C" fn print_string(data: *mut c_void, value: *mut String) {
+    let data = cast_to_runtime_data(data);
     let str = unsafe { Rc::from_raw(value) };
     if str.ends_with("\n") {
-        print!("{}", str);
+        data.stdout.write_all(str.as_bytes()).expect("failed to write to stdout")
     } else {
-        println!("{}", str);
+        data.stdout.write_all(str.as_bytes()).expect("failed to write to stdout");
+        data.stdout.write_all("\n".as_bytes()).expect("failed to write to stdout");
     }
     Rc::into_raw(str);
 }
 
-pub extern "C" fn print_float(_data: *mut c_void, value: f64) {
-    println!("{}", value);
+pub extern "C" fn print_float(data: *mut c_void, value: f64) {
+    let data = cast_to_runtime_data(data);
+
+    data.stdout.write_fmt( format_args!("{}\n", value)).unwrap();
+    // data.stdout.write_all( value.to_string().as_str().as_bytes()).unwrap();
+
+    // data.stdout.write_all(value.to_string().as_bytes()).expect("failed to write to stdout");
+    // data.stdout.write_all("\n".as_bytes()).expect("failed to write to stdout");
 }
 
 extern "C" fn next_line(data: *mut c_void) -> f64 {
@@ -66,7 +76,6 @@ extern "C" fn concat(
         Err(rc) => (*rc).clone(),
     };
     lhs.push_str(&rhs);
-    // Rc::into_raw(Rc::new(lhs))
     Rc::into_raw(Rc::new(lhs))
 }
 
@@ -169,12 +178,16 @@ pub struct LiveRuntime {
 // a rust global is so we can easily run tests fully independently of each other.
 pub struct RuntimeData {
     columns: Columns,
+    buffer: String,
+    stdout: BufWriter<StdoutLock<'static>>
 }
 
 impl RuntimeData {
     pub fn new(files: Vec<String>) -> RuntimeData {
         RuntimeData {
+            buffer: String::with_capacity(1000),
             columns: Columns::new(files),
+            stdout: BufWriter::new(std::io::stdout().lock()),
         }
     }
 }
