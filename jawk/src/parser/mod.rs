@@ -395,7 +395,7 @@ impl Parser {
     }
     //1 * 3
     fn term(&mut self) -> TypedExpr {
-        let mut expr = self.exp();
+        let mut expr = self.unary();
         while self.matches(vec![TokenType::Star, TokenType::Slash, TokenType::Modulo]) {
             let op = match self.previous().unwrap() {
                 Token::MathOp(MathOp::Star) => MathOp::Star,
@@ -403,9 +403,31 @@ impl Parser {
                 Token::MathOp(MathOp::Modulus) => MathOp::Modulus,
                 _ => panic!("Parser bug in comparison function"),
             };
-            expr = Expr::MathOp(Box::new(expr), op, Box::new(self.exp())).into()
+            expr = Expr::MathOp(Box::new(expr), op, Box::new(self.unary())).into()
         }
         expr
+    }
+
+    fn unary(&mut self) -> TypedExpr {
+        if !(self.peek().ttype() == TokenType::Minus
+            && self.peek_next().ttype() == TokenType::Minus)
+            && !(self.peek().ttype() == TokenType::Plus
+                && self.peek_next().ttype() == TokenType::Plus)
+            && self.matches(vec![TokenType::Minus, TokenType::Plus, TokenType::Bang])
+        {
+            let p = self.previous().unwrap().ttype();
+            let rhs = self.unary();
+            let one = TypedExpr::new_var(Expr::NumberF64(1.0));
+            let zero = TypedExpr::new_var(Expr::NumberF64(0.0));
+            return match p {
+                TokenType::Bang => Expr::BinOp(Box::new(one), BinOp::BangEq, Box::new(rhs)),
+                TokenType::Plus => Expr::MathOp(Box::new(zero), MathOp::Plus, Box::new(rhs)),
+                TokenType::Minus => Expr::MathOp(Box::new(zero), MathOp::Minus, Box::new(rhs)),
+                _ => panic!("compiled bug"),
+            }
+            .into();
+        }
+        self.exp()
     }
 
     fn exp(&mut self) -> TypedExpr {
@@ -542,6 +564,7 @@ impl Parser {
                 self.consume(TokenType::String, "Expected to parse a string here");
                 Expr::String(string).into()
             }
+
             t => panic!("Unexpected token {:?} {}", t, TokenType::name(t.ttype())),
         }
     }
@@ -693,6 +716,73 @@ fn test_mathop_exponent_2() {
         parse(lex("{2 ^ 2 * 3;}").unwrap()),
         Program::new_action_only(expo)
     );
+}
+
+#[test]
+fn test_unary_op() {
+    use crate::lexer::lex;
+    let initial = Box::new(num!(1.0));
+    let first = Box::new(texpr!(Expr::MathOp(
+        Box::new(num!(0.0)),
+        MathOp::Plus,
+        initial
+    )));
+    let second = Box::new(texpr!(Expr::MathOp(
+        Box::new(num!(0.0)),
+        MathOp::Minus,
+        first
+    )));
+    let third = Box::new(texpr!(Expr::MathOp(
+        Box::new(num!(0.0)),
+        MathOp::Plus,
+        second
+    )));
+
+    let fourth = Stmt::Expr(texpr!(Expr::MathOp(
+        Box::new(num!(0.0)),
+        MathOp::Minus,
+        third
+    )));
+
+    assert_eq!(
+        parse(lex("{-+-+1;}").unwrap()),
+        Program::new_action_only(fourth)
+    );
+}
+
+#[test]
+fn test_unary_op2() {
+    use crate::lexer::lex;
+    let initial = Box::new(num!(1.0));
+    let first = Box::new(texpr!(Expr::BinOp(
+        Box::new(num!(1.0)),
+        BinOp::BangEq,
+        initial
+    )));
+    let second = Box::new(texpr!(Expr::MathOp(
+        Box::new(num!(0.0)),
+        MathOp::Plus,
+        first
+    )));
+    let third = Box::new(texpr!(Expr::BinOp(
+        Box::new(num!(1.0)),
+        BinOp::BangEq,
+        second
+    )));
+
+    let fourth = Stmt::Expr(texpr!(Expr::MathOp(
+        Box::new(num!(0.0)),
+        MathOp::Minus,
+        third
+    )));
+
+    let expected = parse(lex("{-!+!1;}").unwrap());
+    let actual = Program::new_action_only(fourth);
+    println!(
+        "Expected {}\nActual {}",
+        expected.pattern_actions[0].action, actual.pattern_actions[0].action
+    );
+    assert_eq!(actual, expected);
 }
 
 #[test]

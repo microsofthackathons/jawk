@@ -797,3 +797,28 @@ test!(
     ONE_LINE,
     "5\n"
 );
+
+test!(test_unary_1, "BEGIN { print (-+-!0) }", ONE_LINE, "1\n");
+
+test!(test_unary_op2, "BEGIN { print (+-+2) }", ONE_LINE, "-2\n");
+
+test!(
+    test_unary_op_w_decrement,
+    "BEGIN { print (+-+2) }",
+    ONE_LINE,
+    "-2\n"
+);
+
+test!(
+    test_unary_op_w_postdecrement_bang,
+    "BEGIN {x = 1; print(!x--); print(x)}",
+    NUMERIC_STRING,
+    "0\n0\n"
+);
+
+test!(
+    test_unary_op_w_predecrement_plus,
+    "BEGIN {x = 1; print(+--x); print(x)}",
+    NUMERIC_STRING,
+    "0\n0\n"
+);
