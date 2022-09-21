@@ -85,6 +85,7 @@ pub enum Token {
     RightBrace,
     LeftParen,
     RightParen,
+    Regex(String),
     Print,
     Ret,
     If,
@@ -143,6 +144,7 @@ pub enum TokenType {
     InplaceAssign,
     Question,
     Colon,
+    Regex,
 }
 
 impl Token {
@@ -197,6 +199,7 @@ impl Token {
             Token::Do => TokenType::Do,
             Token::Question => TokenType::Question,
             Token::Colon => TokenType::Colon,
+            Token::Regex(_) => TokenType::Regex,
         }
     }
 }
@@ -246,6 +249,7 @@ impl TokenType {
             TokenType::Modulo => "%",
             TokenType::Exponent => "^",
             TokenType::InplaceAssign => "?=",
+            TokenType::Regex => "~/match/",
         }
     }
 }

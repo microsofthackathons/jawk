@@ -62,6 +62,30 @@ impl Lexer {
         self.add_token(Token::String(str));
         return Ok(());
     }
+    fn regex(&mut self) -> Result<(), String> {
+        // a ~ b 
+        // a ~ /match/'
+        println!("enteri regex");
+        while self.peek() != '/' && !self.is_at_end() {
+            println!("regex inside while");
+            if self.peek() == '\n' {
+                self.line += 1;
+            }
+
+            self.advance();
+        }
+
+        if self.is_at_end() {
+            let string: String = self.src[self.start..self.src.len()].iter().collect();
+            return Err(format!("Unterminated regex: {}", string));
+        }
+
+        self.advance();
+        let regex = self.src[self.start..self.current].iter().collect::<String>();
+        println!("regex is {:?}", regex);
+        self.add_token(Token::Regex(regex));
+        return Ok(());
+    }
     fn number(&mut self) -> Result<Token, String> {
         while self.peek().is_digit(10) {
             self.advance();
@@ -157,11 +181,21 @@ impl Lexer {
                 }
             }
             '!' => {
-                let tt = match self.matches('=') {
-                    true => Token::BinOp(BinOp::BangEq),
-                    false => Token::Bang,
+                if self.matches('~') {
+                    self.add_token(Token::BinOp(BinOp::NotMatchedBy));
+                    self.whitespaces();
+                    self.start = self.current;
+                    if self.matches('/') {
+                        self.regex()?;
+                    }
+                } else {
+                    let token = match self.matches('=') {
+                        true => Token::BinOp(BinOp::BangEq),
+                        false => Token::Bang
+                    };
+                    self.add_token(token);
                 };
-                self.add_token(tt);
+                
             }
             '|' => {
                 let tt = match self.matches('|') {
@@ -223,6 +257,14 @@ impl Lexer {
                     self.add_token(Token::MathOp(MathOp::Slash));
                 }
             }
+            '~' => {
+                self.add_token(Token::BinOp(BinOp::MatchedBy));
+                self.whitespaces();
+                self.start = self.current;
+                if self.matches('/') {
+                    self.regex()?;
+                }
+            }
             '?' => self.add_token(Token::Question),
             ':' => self.add_token(Token::Colon),
             '{' => self.add_token(Token::LeftBrace),
@@ -248,6 +290,10 @@ impl Lexer {
         }
         Ok(())
     }
+
+    fn whitespaces(&mut self) {
+        while self.matches(' ') {}
+    } 
 
     fn matches(&mut self, expected: char) -> bool {
         if self.is_at_end() {
@@ -618,6 +664,52 @@ fn test_op_eq() {
             Token::InplaceEq(MathOp::Slash),
             Token::InplaceEq(MathOp::Plus),
             Token::InplaceEq(MathOp::Minus),
+            Token::EOF
+        ]
+    );
+}
+
+#[test]
+fn test_regex() {
+    let str = "a ~ b a !~ b";
+    assert_eq!(
+        lex(str).unwrap(),
+        vec![
+            Token::Ident(String::from("a")),
+            Token::BinOp(BinOp::MatchedBy),
+            Token::Ident(String::from("b")),
+            Token::Ident(String::from("a")),
+            Token::BinOp(BinOp::NotMatchedBy),
+            Token::Ident(String::from("b")),
+            Token::EOF
+        ]
+    );
+}
+
+#[test]
+fn test_regex_slash() {
+    let str = "a ~ /match/";
+    assert_eq!(
+        lex(str).unwrap(),
+        vec![
+            Token::Ident(String::from("a")),
+            Token::BinOp(BinOp::MatchedBy),
+            Token::Regex(String::from("/match/")),
+            Token::EOF
+        ]
+    );
+}
+
+
+#[test]
+fn test_regex_slash_not() {
+    let str = "a !~ /match/";
+    assert_eq!(
+        lex(str).unwrap(),
+        vec![
+            Token::Ident(String::from("a")),
+            Token::BinOp(BinOp::NotMatchedBy),
+            Token::Regex(String::from("/match/")),
             Token::EOF
         ]
     );
