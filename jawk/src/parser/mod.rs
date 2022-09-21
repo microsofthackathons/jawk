@@ -81,12 +81,24 @@ impl Parser {
         Some(self.tokens[self.current - 1].clone())
     }
 
+    fn peek_at(&self, idx: usize) -> Token {
+        if let Some(t) = self.tokens.get(idx) {
+            t.clone()
+        } else {
+            Token::EOF
+        }
+    }
+
     fn peek(&self) -> Token {
-        return self.tokens[self.current].clone();
+        self.peek_at(self.current)
     }
 
     fn peek_next(&self) -> Token {
-        return self.tokens[self.current + 1].clone();
+        self.peek_at(self.current + 1)
+    }
+
+    fn peek_next_next(&self) -> Token {
+        self.peek_at(self.current + 2)
     }
 
     fn is_at_end(&self) -> bool {
@@ -249,7 +261,7 @@ impl Parser {
     }
 
     fn assignment(&mut self) -> TypedExpr {
-        let lhs = self.logical_or();
+        let lhs = self.ternary();
         if let Expr::Variable(var) = &lhs.expr {
             let var = var.clone();
             if self.matches(vec![TokenType::Eq]) {
@@ -271,6 +283,24 @@ impl Parser {
             }
         }
         lhs
+    }
+
+    fn ternary(&mut self) -> TypedExpr {
+        let mut cond = self.logical_or();
+        while self.matches(vec![TokenType::Question]) {
+            let expr1 = self.ternary();
+            self.consume(
+                TokenType::Colon,
+                "Expected a colon after question mark in a ternary!",
+            );
+            let expr2 = self.ternary();
+            return TypedExpr::new_var(Expr::Ternary(
+                Box::new(cond),
+                Box::new(expr1),
+                Box::new(expr2),
+            ));
+        }
+        cond
     }
 
     fn logical_or(&mut self) -> TypedExpr {
@@ -338,6 +368,8 @@ impl Parser {
             TokenType::RightBrace,
             TokenType::RightParen,
             TokenType::LeftBrace,
+            TokenType::Question,
+            TokenType::Colon,
         ];
         while !self.is_at_end() && !not_these.contains(&self.peek().ttype()) {
             if let Expr::Concatenation(vals) = &mut expr.expr {
@@ -357,7 +389,7 @@ impl Parser {
                 Token::MathOp(MathOp::Plus) => MathOp::Plus,
                 _ => panic!("Parser bug in comparison function"),
             };
-            expr = Expr::MathOp(Box::new(expr), op, Box::new(self.term())).into()
+            expr = Expr::MathOp(Box::new(expr), op, Box::new(self.comparison())).into();
         }
         expr
     }
@@ -377,10 +409,98 @@ impl Parser {
     }
 
     fn exp(&mut self) -> TypedExpr {
-        let mut expr = self.unary();
+        let mut expr = self.pre_op();
         while self.matches(vec![TokenType::Exponent]) {
             let op = MathOp::Exponent;
-            expr = Expr::MathOp(Box::new(expr), op, Box::new(self.unary())).into()
+            expr = Expr::MathOp(Box::new(expr), op, Box::new(self.pre_op())).into()
+        }
+        expr
+    }
+
+    fn pre_op(&mut self) -> TypedExpr {
+        if self.peek().ttype() == TokenType::Plus
+            && self.peek_next().ttype() == TokenType::Plus
+            && self.peek_next_next().ttype() == TokenType::Ident
+        {
+            self.advance();
+            self.advance();
+            self.advance();
+
+            if let Token::Ident(name) = self.previous().unwrap() {
+                let varExpr = Expr::Variable(name.clone()).into();
+                let increment = Expr::MathOp(
+                    Box::new(varExpr),
+                    MathOp::Plus,
+                    Box::new(Expr::NumberF64(1.0).into()),
+                )
+                .into();
+
+                return Expr::Assign(name, Box::new(increment)).into();
+            }
+        } else if self.peek().ttype() == TokenType::Minus
+            && self.peek_next().ttype() == TokenType::Minus
+            && self.peek_next_next().ttype() == TokenType::Ident
+        {
+            self.advance();
+            self.advance();
+            self.advance();
+
+            if let Token::Ident(name) = self.previous().unwrap() {
+                let varExpr = Expr::Variable(name.clone()).into();
+                let decrement = Expr::MathOp(
+                    Box::new(varExpr),
+                    MathOp::Minus,
+                    Box::new(Expr::NumberF64(1.0).into()),
+                )
+                .into();
+
+                return Expr::Assign(name, Box::new(decrement)).into();
+            }
+        }
+
+        return self.post_op();
+    }
+
+    fn post_op(&mut self) -> TypedExpr {
+        let mut expr = self.unary();
+
+        if let Expr::Variable(name) = expr.expr.clone() {
+            if self.peek().ttype() == TokenType::Plus && self.peek_next().ttype() == TokenType::Plus
+            {
+                self.advance();
+                self.advance();
+                let increment = Expr::MathOp(
+                    Box::new(expr),
+                    MathOp::Plus,
+                    Box::new(Expr::NumberF64(1.0).into()),
+                )
+                .into();
+                let assign = Expr::Assign(name, Box::new(increment)).into();
+                expr = Expr::MathOp(
+                    Box::new(assign),
+                    MathOp::Minus,
+                    Box::new(Expr::NumberF64(1.0).into()),
+                )
+                .into();
+            } else if self.peek().ttype() == TokenType::Minus
+                && self.peek_next().ttype() == TokenType::Minus
+            {
+                self.advance();
+                self.advance();
+                let decrement = Expr::MathOp(
+                    Box::new(expr),
+                    MathOp::Minus,
+                    Box::new(Expr::NumberF64(1.0).into()),
+                )
+                .into();
+                let assign = Expr::Assign(name, Box::new(decrement)).into();
+                expr = Expr::MathOp(
+                    Box::new(assign),
+                    MathOp::Plus,
+                    Box::new(Expr::NumberF64(1.0).into()),
+                )
+                .into();
+            }
         }
         expr
     }

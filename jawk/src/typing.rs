@@ -92,7 +92,21 @@ impl TypeAnalysis {
                 self.map = self.map.insert(var.clone(), value.typ).0;
                 expr.typ = value.typ;
             }
+            Expr::Ternary(cond, expr1, expr2) => {
 
+                self.analyze_expr(cond);
+                let mut if_so_map = self.map.clone();
+                let mut if_not_map = self.map.clone();
+                std::mem::swap(&mut if_so_map, &mut self.map);
+
+                self.analyze_expr(expr1);
+                std::mem::swap(&mut if_so_map, &mut self.map);
+                std::mem::swap(&mut if_not_map, &mut self.map);
+                self.analyze_expr(expr2);
+                std::mem::swap(&mut if_not_map, &mut self.map);
+                self.map = TypeAnalysis::merge_maps(&[&if_so_map, &if_not_map]);
+                expr.typ = Self::merge_types(&expr1.typ, &expr2.typ);
+            }
             Expr::Variable(var) => {
                 if let Some(typ) = self.map.get(var) {
                     expr.typ = *typ;
@@ -248,4 +262,33 @@ fn test_assignment_col() {
         "{ x = $0; } END { print x; }",
         "while(fcheck_if_there_is_another_line){ (s x = (s$(f 0) ))}; print (s x);",
     );
+}
+
+
+#[test]
+fn test_ternary() {
+    test_it("\
+    BEGIN { x = \"a\"; x ? (x=1) : (x=2); print x; }",
+            "(s x = (s \"a\")); \n(f (s x) ? (f x = (f 1)) : (f x = (f 2))); \nprint (f x)");
+}
+
+#[test]
+fn test_ternary_2() {
+    test_it("\
+    BEGIN { x = \"a\"; x ? (x=1) : (x=\"a\"); print x; }",
+            "(s x = (s \"a\")); \n(v (s x) ? (f x = (f 1)) : (s x = (s \"a\"))); \nprint (v x)");
+}
+
+#[test]
+fn test_ternary_3() {
+    test_it("\
+    BEGIN { x ? (x=1) : (x=\"a\"); print x; }",
+            "(v (s x) ? (f x = (f 1)) : (s x = (s \"a\"))); \nprint (v x)");
+}
+
+#[test]
+fn test_ternary_4() {
+    test_it("\
+    BEGIN { x ? (x=1) : (x=4); print x; }",
+            "(f (s x) ? (f x = (f 1)) : (f x = (f 4)));\nprint (f x)");
 }

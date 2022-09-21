@@ -12,14 +12,19 @@ sudo apt-get install autoconf pkg-config libtool flex bison automake make g++
 cargo build --release
 ``` 
 
+### Mac:
+```
+brew install autoconf automake libtool gcc
+```
+
 ### Windows
 For now you need to use WSL and follow the ubuntu instructions
 
 ### General:
 ```
-cargo build --release
-./target/release/jawk '{ print "Some awk program!}" }' 
-./target/release/jawk -f run.awk some_file.txt
+cargo build
+./target/debug/jawk '{ print "Some awk program!}" }' 
+./target/debug/jawk -f run.awk some_file.txt
 cargo run -- --debug 'BEGIN { print "this will print debug info including the AST and runtime calls" }'
 ```
 
@@ -37,17 +42,11 @@ cargo run -- --debug 'BEGIN { print "this will print debug info including the AS
 7. Redirect output to file
    - close() function
 8. Missing Operators
-   - Ternary
-   - pre/post inc/dec a++ --b
-   - exponential a^b
-   - !logical_not
-   - unary +a -b
+   - !logical_not, unary +a -b
    - expr in array a in b
-   - modulus
 9. Parsing / Lexing negative numbers
 10. ARGV / ARGC and other ENV vars
 11. Pattern Ranges 
-12. Support for unicode in the string comparisons (subroutines.rs)
 13. Parser need to be able to print the where it was when shit went wrong and what happened
 14. Do we actually need numeric strings???
 15. The columns runtime needs to be much faster and lazier.
@@ -68,6 +67,5 @@ Install other awks to test against (they should be on your path with these exact
 Tests look in ./target/release/jawk for a binary to do perf comparisons so you need to do a release build to run the tests.
 
 ```
-cargo build --release
 cargo test
 ```

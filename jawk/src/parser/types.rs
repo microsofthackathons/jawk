@@ -109,6 +109,7 @@ pub enum Expr {
     Variable(String),
     Column(Box<TypedExpr>),
     Call,
+    Ternary(Box<TypedExpr>, Box<TypedExpr>, Box<TypedExpr>),
 }
 
 impl Display for TypedExpr {
@@ -130,6 +131,7 @@ impl Display for Expr {
             Expr::String(str) => write!(f, "\"{}\"", str),
             Expr::NumberF64(n) => write!(f, "{}", n),
             Expr::BinOp(left, op, right) => write!(f, "{}{}{}", left, op, right),
+            Expr::Ternary(cond, expr1, expr2) => write!(f, "{} ? {} : {}", cond, expr1, expr2),
             Expr::MathOp(left, op, right) => write!(f, "{}{}{}", left, op, right),
             Expr::LogicalOp(left, op, right) => write!(f, "{}{}{}", left, op, right),
             Expr::Column(col) => write!(f, "${}", col),
