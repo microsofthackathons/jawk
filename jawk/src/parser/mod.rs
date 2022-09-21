@@ -395,7 +395,7 @@ impl Parser {
     }
     //1 * 3
     fn term(&mut self) -> TypedExpr {
-        let mut expr = self.exp();
+        let mut expr = self.unary();
         while self.matches(vec![TokenType::Star, TokenType::Slash, TokenType::Modulo]) {
             let op = match self.previous().unwrap() {
                 Token::MathOp(MathOp::Star) => MathOp::Star,
@@ -403,9 +403,31 @@ impl Parser {
                 Token::MathOp(MathOp::Modulus) => MathOp::Modulus,
                 _ => panic!("Parser bug in comparison function"),
             };
-            expr = Expr::MathOp(Box::new(expr), op, Box::new(self.exp())).into()
+            expr = Expr::MathOp(Box::new(expr), op, Box::new(self.unary())).into()
         }
         expr
+    }
+
+    fn unary(&mut self) -> TypedExpr {
+        if !(self.peek().ttype() == TokenType::Minus
+            && self.peek_next().ttype() == TokenType::Minus)
+            && !(self.peek().ttype() == TokenType::Plus
+                && self.peek_next().ttype() == TokenType::Plus)
+            && self.matches(vec![TokenType::Minus, TokenType::Plus, TokenType::Bang])
+        {
+            let p = self.previous().unwrap().ttype();
+            let rhs = self.unary();
+            let one = TypedExpr::new_var(Expr::NumberF64(1.0));
+            let zero = TypedExpr::new_var(Expr::NumberF64(0.0));
+            return match p {
+                TokenType::Bang => Expr::BinOp(Box::new(one), BinOp::BangEq, Box::new(rhs)),
+                TokenType::Plus => Expr::MathOp(Box::new(zero), MathOp::Plus, Box::new(rhs)),
+                TokenType::Minus => Expr::MathOp(Box::new(zero), MathOp::Minus, Box::new(rhs)),
+                _ => panic!("compiled bug"),
+            }
+            .into();
+        }
+        self.exp()
     }
 
     fn exp(&mut self) -> TypedExpr {
@@ -462,7 +484,7 @@ impl Parser {
     }
 
     fn post_op(&mut self) -> TypedExpr {
-        let mut expr = self.unary();
+        let mut expr = self.column();
 
         if let Expr::Variable(name) = expr.expr.clone() {
             if self.peek().ttype() == TokenType::Plus && self.peek_next().ttype() == TokenType::Plus
@@ -503,23 +525,6 @@ impl Parser {
             }
         }
         expr
-    }
-
-    fn unary(&mut self) -> TypedExpr {
-        if self.matches(vec![TokenType::Minus, TokenType::Plus, TokenType::Bang]) {
-            let p = self.previous().unwrap().ttype();
-            let rhs = self.unary();
-            let one = TypedExpr::new_var(Expr::NumberF64(1.0));
-            let zero = TypedExpr::new_var(Expr::NumberF64(0.0));
-            return match p {
-                TokenType::Bang => Expr::BinOp(Box::new(one), BinOp::BangEq, Box::new(rhs)),
-                TokenType::Plus => Expr::MathOp(Box::new(zero), MathOp::Plus, Box::new(rhs)),
-                TokenType::Minus => Expr::MathOp(Box::new(zero), MathOp::Minus, Box::new(rhs)),
-                _ => panic!("compiled bug"),
-            }
-            .into();
-        }
-        self.column()
     }
 
     fn column(&mut self) -> TypedExpr {
