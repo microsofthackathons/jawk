@@ -174,6 +174,14 @@ pub struct LiveRuntime {
     pub empty_string: *mut c_void,
 }
 
+impl Drop for LiveRuntime {
+    fn drop(&mut self) {
+        unsafe {
+            (*self.runtime_data).stdout.flush().expect("could not flush stdout");
+        }
+    }
+}
+
 // Pointer to this is passed in with every call. The reason we require it for every call instead of making it
 // a rust global is so we can easily run tests fully independently of each other.
 pub struct RuntimeData {
