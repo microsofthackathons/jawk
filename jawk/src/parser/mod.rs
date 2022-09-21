@@ -330,10 +330,10 @@ impl Parser {
     fn regex(&mut self) -> TypedExpr {
         // "a ~ /match/"
         let mut expr = self.compare();
-        while self.matches(vec![TokenType::MatchedBy]) {
+        while self.matches(vec![TokenType::MatchedBy, TokenType::NotMatchedBy]) {
             expr = TypedExpr::new_var(Expr::BinOp(
                 Box::new(expr),
-                BinOp::MatchedBy,
+                if self.previous().unwrap().ttype() == TokenType::MatchedBy {BinOp::MatchedBy} else {BinOp::NotMatchedBy},
                 Box::new(self.compare()),
             ));
         }

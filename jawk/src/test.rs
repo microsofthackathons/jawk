@@ -803,3 +803,21 @@ test!(
     ONE_LINE,
     "1\n"
 );
+test!(
+    test_regex_2,
+    "BEGIN { print \"123\" !~ \"1\"}",
+    ONE_LINE,
+    "0\n"
+);
+test!(
+    test_regex_3,
+    "BEGIN { print \"123\" ~ /1/}",
+    ONE_LINE,
+    "1\n"
+);
+test!(
+    test_regex_4,
+    "BEGIN { print \"123\" !~ /1/}",
+    ONE_LINE,
+    "0\n"
+);

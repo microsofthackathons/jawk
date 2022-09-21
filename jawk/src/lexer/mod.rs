@@ -79,7 +79,7 @@ impl Lexer {
         }
 
         self.advance();
-        let regex = self.src[self.start..self.current].iter().collect::<String>();
+        let regex = self.src[self.start+1..self.current-1].iter().collect::<String>();
         println!("regex is {:?}", regex);
         self.add_token(Token::Regex(regex));
         return Ok(());
@@ -692,7 +692,7 @@ fn test_regex_slash() {
         vec![
             Token::Ident(String::from("a")),
             Token::BinOp(BinOp::MatchedBy),
-            Token::Regex(String::from("/match/")),
+            Token::Regex(String::from("match")),
             Token::EOF
         ]
     );
@@ -707,7 +707,7 @@ fn test_regex_slash_not() {
         vec![
             Token::Ident(String::from("a")),
             Token::BinOp(BinOp::NotMatchedBy),
-            Token::Regex(String::from("/match/")),
+            Token::Regex(String::from("match")),
             Token::EOF
         ]
     );
