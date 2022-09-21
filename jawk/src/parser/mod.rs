@@ -316,13 +316,26 @@ impl Parser {
     }
 
     fn logical_and(&mut self) -> TypedExpr {
-        let mut expr = self.compare();
+        let mut expr = self.regex();
         while self.matches(vec![TokenType::And]) {
             expr = TypedExpr::new_var(Expr::LogicalOp(
                 Box::new(expr),
                 LogicalOp::And,
-                Box::new(self.compare()),
+                Box::new(self.regex()),
             ))
+        }
+        expr
+    }
+
+    fn regex(&mut self) -> TypedExpr {
+        // "a ~ /match/"
+        let mut expr = self.compare();
+        while self.matches(vec![TokenType::MatchedBy]) {
+            expr = TypedExpr::new_var(Expr::BinOp(
+                Box::new(expr),
+                BinOp::MatchedBy,
+                Box::new(self.compare()),
+            ));
         }
         expr
     }
@@ -370,6 +383,8 @@ impl Parser {
             TokenType::LeftBrace,
             TokenType::Question,
             TokenType::Colon,
+            TokenType::MatchedBy,
+            TokenType::NotMatchedBy,
         ];
         while !self.is_at_end() && !not_these.contains(&self.peek().ttype()) {
             if let Expr::Concatenation(vals) = &mut expr.expr {
@@ -541,6 +556,10 @@ impl Parser {
             Token::String(string) => {
                 self.consume(TokenType::String, "Expected to parse a string here");
                 Expr::String(string).into()
+            }
+            Token::Regex(string) => {
+                self.consume(TokenType::Regex, "Expected to parse a string here");
+                Expr::Regex(string).into()
             }
             t => panic!("Unexpected token {:?} {}", t, TokenType::name(t.ttype())),
         }

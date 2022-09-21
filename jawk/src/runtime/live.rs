@@ -7,6 +7,7 @@ use std::ffi::c_void;
 use std::fmt::{Write as FmtWrite};
 use std::io::{BufWriter, StdoutLock, Write};
 use std::rc::Rc;
+use regex::Regex;
 
 // Live runtime used by most programs.
 // A pointer to the runtime data is provided for all calls but only used for some.
@@ -99,7 +100,13 @@ extern "C" fn binop(
         BinOp::LessEq => left <= right,
         BinOp::BangEq => left != right,
         BinOp::EqEq => left == right,
-        BinOp::MatchedBy => todo!("regex"),
+        BinOp::MatchedBy => {
+            // use regex::Regex;
+            // let re = Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
+            // assert!(re.is_match("2014-01-01"));  
+            let RE = Regex::new(&right).unwrap();
+            RE.is_match(&left)
+        },
         BinOp::NotMatchedBy => todo!("regex"),
     };
     let res = if res { 1.0 } else { 0.0 };

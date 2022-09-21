@@ -8,6 +8,8 @@ gnu-libjit = { path = "../gnu-libjit" }
 immutable-chunkmap = "1.0.4"
 tempfile = "3.3.0"
 libc = "0.2.127"
+regex = "1"
+
 
 [[bin]]
 name = "jawk"

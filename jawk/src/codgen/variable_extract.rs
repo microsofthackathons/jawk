@@ -41,6 +41,9 @@ fn extract_expr(expr: &TypedExpr, vars: &mut HashSet<String>, consts: &mut HashS
         Expr::String(str) => {
             consts.insert(str.to_string());
         }
+        Expr::Regex(str) => {
+            consts.insert(str.to_string());
+        }
         Expr::NumberF64(_n) => {}
         Expr::BinOp(left, _op, right) => {
             extract_expr(left, vars, consts);
