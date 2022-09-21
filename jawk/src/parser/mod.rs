@@ -286,21 +286,21 @@ impl Parser {
     }
 
     fn ternary(&mut self) -> TypedExpr {
-        let lhs = self.logical_or();
-        if self.matches(vec![TokenType::Question]) {
-            let expr1 = self.logical_or();
+        let mut cond = self.logical_or();
+        while self.matches(vec![TokenType::Question]) {
+            let expr1 = self.ternary();
             self.consume(
                 TokenType::Colon,
                 "Expected a colon after question mark in a ternary!",
             );
-            let expr2 = self.logical_or();
+            let expr2 = self.ternary();
             return TypedExpr::new_var(Expr::Ternary(
-                Box::new(lhs),
+                Box::new(cond),
                 Box::new(expr1),
                 Box::new(expr2),
             ));
         }
-        lhs
+        cond
     }
 
     fn logical_or(&mut self) -> TypedExpr {
