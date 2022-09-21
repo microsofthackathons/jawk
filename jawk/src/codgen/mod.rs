@@ -305,7 +305,6 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
         let str_tag = self.string_tag();
         match typ {
             AwkT::String => {
-                // String all runtime
                 let ptr = self.runtime.copy_string(&mut self.function, value.pointer);
                 ValueT::new(str_tag, zero, ptr)
             }
@@ -314,8 +313,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 // If type unknown, check tag and call runtime if it's a string
                 let mut done = Label::new();
                 let is_string = self.function.insn_eq(&str_tag, &value.tag);
-                self.function
-                    .insn_store(&self.binop_scratch.pointer, &self.zero_ptr);
+                self.function.insn_store(&self.binop_scratch.pointer, &self.zero_ptr);
                 self.function.insn_branch_if_not(&is_string, &mut done);
                 let ptr = self.runtime.copy_string(&mut self.function, value.pointer);
                 self.function.insn_store(&self.binop_scratch.pointer, &ptr);
