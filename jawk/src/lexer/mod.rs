@@ -80,7 +80,6 @@ impl Lexer {
 
         self.advance();
         let regex = self.src[self.start+1..self.current-1].iter().collect::<String>();
-        println!("regex is {:?}", regex);
         self.add_token(Token::Regex(regex));
         return Ok(());
     }

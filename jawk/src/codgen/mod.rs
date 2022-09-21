@@ -465,7 +465,6 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 let left = self.compile_expr(left_expr);
                 let right = self.compile_expr(right_expr);
                 let tag = self.float_tag();
-                println!("{:?} {:?}", left_expr, right_expr);
 
                 // Optimize the case where we know both are floats
                 match (left_expr.typ, right_expr.typ) {
