@@ -80,7 +80,7 @@ impl Parser {
         }
         Some(self.tokens[self.current - 1].clone())
     }
-    
+
     fn peek_at(&self, idx: usize) -> Token {
         if let Some(t) = self.tokens.get(idx) {
             t.clone()
@@ -94,11 +94,11 @@ impl Parser {
     }
 
     fn peek_next(&self) -> Token {
-        self.peek_at(self.current+1)
+        self.peek_at(self.current + 1)
     }
 
     fn peek_next_next(&self) -> Token {
-        self.peek_at(self.current+2)
+        self.peek_at(self.current + 2)
     }
 
     fn is_at_end(&self) -> bool {
@@ -261,7 +261,7 @@ impl Parser {
     }
 
     fn assignment(&mut self) -> TypedExpr {
-        let lhs = self.logical_or();
+        let lhs = self.ternary();
         if let Expr::Variable(var) = &lhs.expr {
             let var = var.clone();
             if self.matches(vec![TokenType::Eq]) {
@@ -283,6 +283,24 @@ impl Parser {
             }
         }
         lhs
+    }
+
+    fn ternary(&mut self) -> TypedExpr {
+        let mut cond = self.logical_or();
+        while self.matches(vec![TokenType::Question]) {
+            let expr1 = self.ternary();
+            self.consume(
+                TokenType::Colon,
+                "Expected a colon after question mark in a ternary!",
+            );
+            let expr2 = self.ternary();
+            return TypedExpr::new_var(Expr::Ternary(
+                Box::new(cond),
+                Box::new(expr1),
+                Box::new(expr2),
+            ));
+        }
+        cond
     }
 
     fn logical_or(&mut self) -> TypedExpr {
@@ -350,6 +368,8 @@ impl Parser {
             TokenType::RightBrace,
             TokenType::RightParen,
             TokenType::LeftBrace,
+            TokenType::Question,
+            TokenType::Colon,
         ];
         while !self.is_at_end() && !not_these.contains(&self.peek().ttype()) {
             if let Expr::Concatenation(vals) = &mut expr.expr {
@@ -398,29 +418,41 @@ impl Parser {
     }
 
     fn pre_op(&mut self) -> TypedExpr {
-        if self.peek().ttype() == TokenType::Plus && 
-            self.peek_next().ttype() == TokenType::Plus && 
-            self.peek_next_next().ttype() == TokenType::Ident {
+        if self.peek().ttype() == TokenType::Plus
+            && self.peek_next().ttype() == TokenType::Plus
+            && self.peek_next_next().ttype() == TokenType::Ident
+        {
             self.advance();
             self.advance();
             self.advance();
-            
+
             if let Token::Ident(name) = self.previous().unwrap() {
                 let varExpr = Expr::Variable(name.clone()).into();
-                let increment = Expr::MathOp(Box::new(varExpr), MathOp::Plus, Box::new(Expr::NumberF64(1.0).into())).into();
+                let increment = Expr::MathOp(
+                    Box::new(varExpr),
+                    MathOp::Plus,
+                    Box::new(Expr::NumberF64(1.0).into()),
+                )
+                .into();
 
                 return Expr::Assign(name, Box::new(increment)).into();
             }
-        } else if self.peek().ttype() == TokenType::Minus && 
-            self.peek_next().ttype() == TokenType::Minus && 
-            self.peek_next_next().ttype() == TokenType::Ident {
+        } else if self.peek().ttype() == TokenType::Minus
+            && self.peek_next().ttype() == TokenType::Minus
+            && self.peek_next_next().ttype() == TokenType::Ident
+        {
             self.advance();
             self.advance();
             self.advance();
 
             if let Token::Ident(name) = self.previous().unwrap() {
                 let varExpr = Expr::Variable(name.clone()).into();
-                let decrement = Expr::MathOp(Box::new(varExpr), MathOp::Minus, Box::new(Expr::NumberF64(1.0).into())).into();
+                let decrement = Expr::MathOp(
+                    Box::new(varExpr),
+                    MathOp::Minus,
+                    Box::new(Expr::NumberF64(1.0).into()),
+                )
+                .into();
 
                 return Expr::Assign(name, Box::new(decrement)).into();
             }
@@ -433,19 +465,41 @@ impl Parser {
         let mut expr = self.column();
 
         if let Expr::Variable(name) = expr.expr.clone() {
-            
-            if self.peek().ttype() == TokenType::Plus && self.peek_next().ttype() == TokenType::Plus  {
+            if self.peek().ttype() == TokenType::Plus && self.peek_next().ttype() == TokenType::Plus
+            {
                 self.advance();
                 self.advance();
-                let increment = Expr::MathOp(Box::new(expr), MathOp::Plus, Box::new(Expr::NumberF64(1.0).into())).into();
+                let increment = Expr::MathOp(
+                    Box::new(expr),
+                    MathOp::Plus,
+                    Box::new(Expr::NumberF64(1.0).into()),
+                )
+                .into();
                 let assign = Expr::Assign(name, Box::new(increment)).into();
-                expr = Expr::MathOp(Box::new(assign), MathOp::Minus, Box::new(Expr::NumberF64(1.0).into())).into();
-            } else if self.peek().ttype() == TokenType::Minus && self.peek_next().ttype() == TokenType::Minus  {
+                expr = Expr::MathOp(
+                    Box::new(assign),
+                    MathOp::Minus,
+                    Box::new(Expr::NumberF64(1.0).into()),
+                )
+                .into();
+            } else if self.peek().ttype() == TokenType::Minus
+                && self.peek_next().ttype() == TokenType::Minus
+            {
                 self.advance();
                 self.advance();
-                let decrement = Expr::MathOp(Box::new(expr), MathOp::Minus, Box::new(Expr::NumberF64(1.0).into())).into();
+                let decrement = Expr::MathOp(
+                    Box::new(expr),
+                    MathOp::Minus,
+                    Box::new(Expr::NumberF64(1.0).into()),
+                )
+                .into();
                 let assign = Expr::Assign(name, Box::new(decrement)).into();
-                expr = Expr::MathOp(Box::new(assign), MathOp::Plus, Box::new(Expr::NumberF64(1.0).into())).into();
+                expr = Expr::MathOp(
+                    Box::new(assign),
+                    MathOp::Plus,
+                    Box::new(Expr::NumberF64(1.0).into()),
+                )
+                .into();
             }
         }
         expr

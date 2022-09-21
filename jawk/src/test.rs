@@ -14,7 +14,10 @@ const NUMERIC_STRING: &'static str = "1 2 3\n04 005 6\n07 8 9";
 fn test_once(interpreter: &str, prog: &str, file: &PathBuf) -> (String, Duration) {
     // Run a single awk once and capture the output
     let start = Instant::now();
-    let output = std::process::Command::new(interpreter).args(vec![prog, file.to_str().unwrap()]).output().unwrap();
+    let output = std::process::Command::new(interpreter)
+        .args(vec![prog, file.to_str().unwrap()])
+        .output()
+        .unwrap();
     let dir = start.elapsed();
     (
         String::from_utf8(output.stdout).expect("cannot convert output to utf8"),
@@ -46,8 +49,17 @@ fn test_against(interpreter: &str, prog: &str, oracle_output: &str, file: &PathB
     let ours = compile_and_capture(ast, files.as_slice()).unwrap();
 
     let output = test_once(interpreter, prog, file).0;
-    assert_eq!(ours.output(), output, "LEFT jawk, RIGHT {} stdout didnt match", interpreter);
-    assert_eq!(ours.output(), oracle_output, "LEFT jawk, RIGHT expected-output, stdout didn't match");
+    assert_eq!(
+        ours.output(),
+        output,
+        "LEFT jawk, RIGHT {} stdout didnt match",
+        interpreter
+    );
+    assert_eq!(
+        ours.output(),
+        oracle_output,
+        "LEFT jawk, RIGHT expected-output, stdout didn't match"
+    );
 }
 
 fn test_it<S: AsRef<str>>(prog: &str, file: S, oracle_output: &str) {
@@ -70,10 +82,10 @@ fn test_it<S: AsRef<str>>(prog: &str, file: S, oracle_output: &str) {
         string_in, string_out
     );
 
-    test_against("awk", prog,  oracle_output, &file_path);
-    test_against("mawk", prog,  oracle_output, &file_path);
-    test_against("goawk", prog,  oracle_output, &file_path);
-    test_against("onetrueawk", prog,  oracle_output, &file_path);
+    test_against("awk", prog, oracle_output, &file_path);
+    test_against("mawk", prog, oracle_output, &file_path);
+    test_against("goawk", prog, oracle_output, &file_path);
+    test_against("onetrueawk", prog, oracle_output, &file_path);
 }
 
 macro_rules! test {
@@ -133,12 +145,7 @@ test!(
     ONE_LINE,
     "0\n1\n2\n4\n3\n"
 );
-test!(
-    test_simple_assignment,
-    "{x = 0; print x;}",
-    ONE_LINE,
-    "0\n"
-);
+test!(test_simple_assignment, "{x = 0; print x;}", ONE_LINE, "0\n");
 test!(test_simple_assgn, "{x = 0; print x }", ONE_LINE, "0\n");
 test!(
     test_assignment_in_ifs0,
@@ -168,12 +175,7 @@ test!(test_deeply_nested_mixed_assignment, "{x = 0; if (1) { if (1) { x = 1 } el
 test!(test_deeply_nested_mixed_assignment2, "{x = 0; if (1) { if (1) { x = 1 } else { x = 2.2 } } else { if (1) { x = 1 } else { x = 4.2 } }; { x = 4; x=5; x=5.5; print x; } }", ONE_LINE, "5.5\n");
 test!(test_int_plus_float, "{print 1 + 1.1}", ONE_LINE, "2.1\n");
 test!(test_float_plus_int, "{print 1.1 + 1}", ONE_LINE, "2.1\n");
-test!(
-    test_grouping,
-    "{print (1.1 + 3.3) + 1}",
-    ONE_LINE,
-    "5.4\n"
-);
+test!(test_grouping, "{print (1.1 + 3.3) + 1}", ONE_LINE, "5.4\n");
 test!(test_float_add, "{print (1.0 + 2.0)}", ONE_LINE, "3\n");
 test!(
     test_column_access_1_line,
@@ -541,12 +543,7 @@ test!(
     "a\n"
 );
 test!(test_concat_cols2, "{ print ($1 $2) }", ONE_LINE, "12\n");
-test!(
-    test_concat_cols3,
-    "{ print ($1 $2 $3) }",
-    ONE_LINE,
-    "123\n"
-);
+test!(test_concat_cols3, "{ print ($1 $2 $3) }", ONE_LINE, "123\n");
 test!(
     test_concat_multiline,
     "{ a = a $1;} END{ print a}",
@@ -650,15 +647,19 @@ test!(
     test_concat_undef,
     "BEGIN { a = a \"a\"; print a; }",
     ONE_LINE,
-    "a\n");
+    "a\n"
+);
 
 test!(test_loop_concat_long1, "BEGIN {a = \"\";        b = \"\";        x = 0;        while (x < 100) { a = a \"a\";                b = b \"a\";                x = x + 1;                if (a > b) {print \"a is not eq to b\";                }}print x;        print \"done\";}", ONE_LINE, "100\ndone\n");
 test!(test_loop_concat_long2, "BEGIN {a = \"\";        b = \"\";        x = 0;        while (x < 100) { a = a \"a\";                b = b \"a\";                x = x + 1;                if (a != b) {print \"a is not eq to b\";                }}print x;        print \"done\";}", ONE_LINE, "100\ndone\n");
 
 test!(test_pattern_only_1_4, "$1 == $4", NUMBERS, "");
-test!(test_pattern_only_1_4_2, "$1 == $4", NUMBERS2, "4 5 6 4\n7 8 9 7\n");
-
-
+test!(
+    test_pattern_only_1_4_2,
+    "$1 == $4",
+    NUMBERS2,
+    "4 5 6 4\n7 8 9 7\n"
+);
 
 // TODO: Efficient IO
 // test!(test_pattern_long, "$1 == $4", long_number_file(), ".");
@@ -671,71 +672,128 @@ test!(test_pattern_only_1_4_2, "$1 == $4", NUMBERS2, "4 5 6 4\n7 8 9 7\n");
 //     "."
 // );
 
-
 // const NUMERIC_STRING: &'static str = "1 2 3\n04 005 6\n07 8 9";
 test!(
     test_numeric_string2,
     "{ print ($0 < $1 ) }",
     NUMERIC_STRING,
-    "0\n0\n0\n");
+    "0\n0\n0\n"
+);
 test!(
     test_numeric_string3,
     "{ print (\"04\" > \"005\") }",
     NUMERIC_STRING,
-    "1\n1\n1\n");
+    "1\n1\n1\n"
+);
 test!(
     test_numeric_string4,
     "{ print (\"04\" >= \"005\") }",
     NUMERIC_STRING,
-    "1\n1\n1\n");
+    "1\n1\n1\n"
+);
 test!(
     test_post_increment,
     "BEGIN { a = 4; print a++ + a++}",
     NUMERIC_STRING,
-    "9\n");
+    "9\n"
+);
 test!(
     test_post_decrement,
     "BEGIN { a = 4; print a-- - a--}",
     NUMERIC_STRING,
-    "1\n");
+    "1\n"
+);
 test!(
     test_post_decrement_and_increment,
     "BEGIN { a = 4; print a++ - a--}",
     NUMERIC_STRING,
-    "-1\n");
+    "-1\n"
+);
 test!(
     test_exp_post_increment,
     "BEGIN { a = 3; print 2 ^ a++; print a }",
     NUMERIC_STRING,
-    "8\n4\n");
+    "8\n4\n"
+);
 test!(
     test_post_increment_exp,
     "BEGIN { a = 3; print a++ ^ 2; print a}",
     NUMERIC_STRING,
-    "9\n4\n");
+    "9\n4\n"
+);
 test!(
     test_pre_increment,
     "BEGIN { a = 3; print ++a; print a}",
     NUMERIC_STRING,
-    "4\n4\n");
+    "4\n4\n"
+);
 test!(
     test_pre_decrement,
     "BEGIN { a = 3; print --a; print a}",
     NUMERIC_STRING,
-    "2\n2\n");
+    "2\n2\n"
+);
 test!(
     test_post_pre_increment,
     "BEGIN { a = 3; print a++ + ++a; print a}",
     NUMERIC_STRING,
-    "8\n5\n");
+    "8\n5\n"
+);
 
 test!(
     test_post_pre_decrement,
     "BEGIN { a = 3; print a-- + --a; print a}",
     NUMERIC_STRING,
-    "4\n1\n");
+    "4\n1\n"
+);
+test!(test_mod_2, "BEGIN { print (3 % 2) }", NUMERIC_STRING, "1\n");
 test!(
-    test_mod_2,
-    "BEGIN { print (3 % 2) }",
+    test_ternary_false,
+    "BEGIN { print 0 ? 1 : 2 }",
     NUMERIC_STRING,
-    "1\n");
+    "2\n"
+);
+test!(
+    test_ternary_true,
+    "BEGIN { print 1 ? 1 : 2 }",
+    NUMERIC_STRING,
+    "1\n"
+);
+test!(
+    test_ternary_arith,
+    "BEGIN { print 1 ? 1+1 : 2+2 }",
+    NUMERIC_STRING,
+    "2\n"
+);
+
+test!(
+    test_ternary_nested,
+    "BEGIN { x = 2; y = 3; print x ? ( y ? \"true\" : 3 ) : 4 }",
+    ONE_LINE,
+    "true\n"
+);
+
+test!(
+    test_ternary_nested_flat1,
+    "BEGIN { x = 3; y = 0; print x ? y ? 33 : 44 : 55; }",
+    ONE_LINE,
+    "44\n"
+);
+test!(
+    test_ternary_nested_flat2,
+    "BEGIN { x = 0; y = 0; print x ? y ? 33 : 44 : 55; }",
+    ONE_LINE,
+    "55\n"
+);
+test!(
+    test_ternary_nested_flat3,
+    "BEGIN { x = 0; z = 3; print x ? y : z ? 2 : 3 }",
+    ONE_LINE,
+    "2\n"
+);
+test!(
+    test_ternary_nested_flat4,
+    "BEGIN { x = 0; z = 3; y = 5; print (x ? 0 : 2) ? y : z ? 2 : 3 }",
+    ONE_LINE,
+    "5\n"
+);

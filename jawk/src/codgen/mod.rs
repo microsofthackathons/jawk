@@ -313,7 +313,8 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 // If type unknown, check tag and call runtime if it's a string
                 let mut done = Label::new();
                 let is_string = self.function.insn_eq(&str_tag, &value.tag);
-                self.function.insn_store(&self.binop_scratch.pointer, &self.zero_ptr);
+                self.function
+                    .insn_store(&self.binop_scratch.pointer, &self.zero_ptr);
                 self.function.insn_branch_if_not(&is_string, &mut done);
                 let ptr = self.runtime.copy_string(&mut self.function, value.pointer);
                 self.function.insn_store(&self.binop_scratch.pointer, &ptr);
@@ -639,6 +640,28 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 // Eg: a = "a" "b" "c"
                 let compiled = self.compile_exprs_to_string(vars);
                 self.concat_values(&compiled)
+            }
+            Expr::Ternary(cond, expr1, expr2) => {
+                let mut done_lbl = Label::new();
+                let mut truthy_lbl = Label::new();
+
+                let result = self.compile_expr(cond);
+                let bool_value = self.truthy_ret_integer(&result, cond.typ);
+
+                self.function.insn_branch_if(&bool_value, &mut truthy_lbl);
+
+                let falsy_result = self.compile_expr(expr2);
+                self.store(&self.binop_scratch.clone(), &falsy_result);
+                self.function.insn_branch(&mut done_lbl);
+
+                self.function.insn_label(&mut truthy_lbl);
+
+                let truthy_result = self.compile_expr(expr1);
+                self.store(&self.binop_scratch.clone(), &truthy_result);
+
+                self.function.insn_label(&mut done_lbl);
+
+                self.load(&self.binop_scratch.clone())
             }
         }
     }
