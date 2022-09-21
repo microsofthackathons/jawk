@@ -819,3 +819,13 @@ test!(
     ".",
     1
 );
+
+test!(test_unary_1, "BEGIN { print (-+-!0) }", ONE_LINE, "1\n", 0);
+
+test!(
+    test_unary_op2,
+    "BEGIN { print (+-+2) }",
+    ONE_LINE,
+    "-2\n",
+    0
+);

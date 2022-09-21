@@ -386,37 +386,20 @@ impl Parser {
     }
 
     fn unary(&mut self) -> TypedExpr {
-        // let mut expr = self.column();
-        // let prev_op = self.previous().unwrap();
-
-        // println!("inside unary");
-        let expr;
-
-        if self.matches(vec![TokenType::Minus, TokenType::Plus])
-            && !self.matches(vec![TokenType::Minus, TokenType::Plus])
-        {
-            let prev_op = self.previous().unwrap();
-            // +, a
-            // -, someVar
-
-            let op = match prev_op {
-                Token::MathOp(MathOp::Plus) => MathOp::Plus,
-                Token::MathOp(MathOp::Minus) => MathOp::Minus,
-                _ => panic!("Parser bug in unary, should not observe not +/-"),
-            };
-            // println!("inside if-else");
-            let lhs = TypedExpr::new_num(Expr::NumberF64(0.0));
-            expr = Expr::MathOp(Box::new(lhs), op, Box::new(self.column())).into();
-        } else if self.matches(vec![TokenType::Bang]) {
-            // expr = self.column();
-            let op = BinOp::BangEq;
-            let lhs = TypedExpr::new_num(Expr::NumberF64(1.0));
-            expr = Expr::BinOp(Box::new(lhs), op, Box::new(self.column())).into();
-        } else {
-            expr = self.column();
+        if self.matches(vec![TokenType::Minus, TokenType::Plus, TokenType::Bang]) {
+            let p = self.previous().unwrap().ttype();
+            let rhs = self.unary();
+            let one = TypedExpr::new_var(Expr::NumberF64(1.0));
+            let zero = TypedExpr::new_var(Expr::NumberF64(0.0));
+            return match p {
+                TokenType::Bang => Expr::BinOp(Box::new(one), BinOp::BangEq, Box::new(rhs)),
+                TokenType::Plus => Expr::MathOp(Box::new(zero), MathOp::Plus, Box::new(rhs)),
+                TokenType::Minus => Expr::MathOp(Box::new(zero), MathOp::Minus, Box::new(rhs)),
+                _ => panic!("compiled bug"),
+            }
+            .into();
         }
-
-        expr
+        self.column()
     }
 
     fn column(&mut self) -> TypedExpr {
@@ -456,6 +439,7 @@ impl Parser {
                 self.consume(TokenType::String, "Expected to parse a string here");
                 Expr::String(string).into()
             }
+
             t => panic!("Unexpected token {:?} {}", t, TokenType::name(t.ttype())),
         }
     }
@@ -607,6 +591,73 @@ fn test_mathop_exponent_2() {
         parse(lex("{2 ^ 2 * 3;}").unwrap()),
         Program::new_action_only(expo)
     );
+}
+
+#[test]
+fn test_unary_op() {
+    use crate::lexer::lex;
+    let initial = Box::new(num!(1.0));
+    let first = Box::new(texpr!(Expr::MathOp(
+        Box::new(num!(0.0)),
+        MathOp::Plus,
+        initial
+    )));
+    let second = Box::new(texpr!(Expr::MathOp(
+        Box::new(num!(0.0)),
+        MathOp::Minus,
+        first
+    )));
+    let third = Box::new(texpr!(Expr::MathOp(
+        Box::new(num!(0.0)),
+        MathOp::Plus,
+        second
+    )));
+
+    let fourth = Stmt::Expr(texpr!(Expr::MathOp(
+        Box::new(num!(0.0)),
+        MathOp::Minus,
+        third
+    )));
+
+    assert_eq!(
+        parse(lex("{-+-+1;}").unwrap()),
+        Program::new_action_only(fourth)
+    );
+}
+
+#[test]
+fn test_unary_op2() {
+    use crate::lexer::lex;
+    let initial = Box::new(num!(1.0));
+    let first = Box::new(texpr!(Expr::BinOp(
+        Box::new(num!(1.0)),
+        BinOp::BangEq,
+        initial
+    )));
+    let second = Box::new(texpr!(Expr::MathOp(
+        Box::new(num!(0.0)),
+        MathOp::Plus,
+        first
+    )));
+    let third = Box::new(texpr!(Expr::BinOp(
+        Box::new(num!(1.0)),
+        BinOp::BangEq,
+        second
+    )));
+
+    let fourth = Stmt::Expr(texpr!(Expr::MathOp(
+        Box::new(num!(0.0)),
+        MathOp::Minus,
+        third
+    )));
+
+    let expected = parse(lex("{-!+!1;}").unwrap());
+    let actual = Program::new_action_only(fourth);
+    println!(
+        "Expected {}\nActual {}",
+        expected.pattern_actions[0].action, actual.pattern_actions[0].action
+    );
+    assert_eq!(actual, expected);
 }
 
 #[test]
