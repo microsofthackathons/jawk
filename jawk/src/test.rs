@@ -797,3 +797,9 @@ test!(
     ONE_LINE,
     "5\n"
 );
+test!(
+    test_regex_1,
+    "BEGIN { print \"123\" ~ \"1\"}",
+    ONE_LINE,
+    "1\n"
+);

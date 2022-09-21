@@ -107,7 +107,10 @@ extern "C" fn binop(
             let RE = Regex::new(&right).unwrap();
             RE.is_match(&left)
         },
-        BinOp::NotMatchedBy => todo!("regex"),
+        BinOp::NotMatchedBy => {
+            let RE = Regex::new(&right).unwrap();
+            !RE.is_match(&left)
+        },
     };
     let res = if res { 1.0 } else { 0.0 };
     Rc::into_raw(left);
