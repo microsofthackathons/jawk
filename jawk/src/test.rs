@@ -14,10 +14,7 @@ const NUMERIC_STRING: &'static str = "1 2 3\n04 005 6\n07 8 9";
 fn test_once(interpreter: &str, prog: &str, file: &PathBuf) -> (String, Duration) {
     // Run a single awk once and capture the output
     let start = Instant::now();
-    let output = std::process::Command::new(interpreter)
-        .args(vec![prog, file.to_str().unwrap()])
-        .output()
-        .unwrap();
+    let output = std::process::Command::new(interpreter).args(vec![prog, file.to_str().unwrap()]).output().unwrap();
     let dir = start.elapsed();
     (
         String::from_utf8(output.stdout).expect("cannot convert output to utf8"),
@@ -49,11 +46,7 @@ fn test_against(interpreter: &str, prog: &str, oracle_output: &str, file: &PathB
     let ours = compile_and_capture(ast, files.as_slice()).unwrap();
 
     let output = test_once(interpreter, prog, file).0;
-    assert_eq!(
-        ours.output(), output,
-        "LEFT jawk, RIGHT {} stdout didnt match for {}",
-        interpreter, interpreter
-    );
+    assert_eq!(ours.output(), output, "LEFT jawk, RIGHT {} stdout didnt match", interpreter);
     assert_eq!(ours.output(), oracle_output, "LEFT jawk, RIGHT expected-output, stdout didn't match");
 }
 
