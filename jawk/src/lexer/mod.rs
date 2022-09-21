@@ -65,9 +65,7 @@ impl Lexer {
     fn regex(&mut self) -> Result<(), String> {
         // a ~ b 
         // a ~ /match/'
-        println!("enteri regex");
         while self.peek() != '/' && !self.is_at_end() {
-            println!("regex inside while");
             if self.peek() == '\n' {
                 self.line += 1;
             }
