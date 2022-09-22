@@ -11,6 +11,17 @@ use std::os::raw::{c_char, c_long, c_void};
 use std::rc::Rc;
 use crate::codgen::{CodeGen, ValuePtrT, ValueT, variable_extract};
 
+fn float_to_string<RuntimeT: Runtime>(func: &mut Function, runtime: &mut RuntimeT, value: &ValueT) -> Value {
+    runtime.number_to_string(func, value.float.clone())
+}
+fn string_to_string<RuntimeT: Runtime>(_func: &mut Function, _runtime: &mut RuntimeT, value: &ValueT) -> Value {
+    value.pointer.clone()
+}
+fn array_to_string<RuntimeT: Runtime>(_func: &mut Function, _runtime: &mut RuntimeT, value: &ValueT) -> Value {
+    // TODO: Errors
+    value.pointer.clone()
+}
+
 impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
     // Helpers for commonly used values
     pub fn float_tag(&self) -> Value {
@@ -21,6 +32,45 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
     }
     pub fn zero_f(&self) -> Value {
         self.zero_f.clone()
+    }
+
+    pub fn cases(
+        &mut self,
+        input: &ValueT,
+        input_type: AwkT,
+        is_ptr: bool,
+        emit_float_code: fn(&mut Function, &mut RuntimeT, &ValueT) -> Value,
+        emit_string_code: fn(&mut Function, &mut RuntimeT, &ValueT) -> Value,
+        emit_array_code: fn(&mut Function, &mut RuntimeT, &ValueT) -> Value,
+    ) -> Value {
+        match input_type {
+            AwkT::String => return emit_string_code(&mut self.function, &mut self.runtime, input),
+            AwkT::Float => return emit_float_code(&mut self.function, &mut self.runtime, input),
+            AwkT::Array => return emit_array_code(&mut self.function, &mut self.runtime, input),
+            _ => {}
+        }
+        let mut temp_storage = if is_ptr { self.binop_scratch.pointer.clone() } else { self.binop_scratch.float.clone() };
+        let string_tag = self.string_tag();
+        let array_tag = self.string_tag();
+        let mut string_lbl = Label::new();
+        let mut array_lbl = Label::new();
+        let mut done_lbl = Label::new();
+        let is_string = self.function.insn_eq(&input.tag, &string_tag);
+        self.function.insn_branch_if(&is_string, &mut string_lbl);
+        let is_array = self.function.insn_eq(&input.tag, &array_tag);
+        self.function.insn_branch_if(&is_array, &mut array_lbl);
+        let res = emit_float_code(&mut self.function, &mut self.runtime, input);
+        self.function.insn_store(&mut temp_storage, &res);
+        self.function.insn_branch(&mut done_lbl);
+        self.function.insn_label(&mut string_lbl);
+        let res = emit_string_code(&mut self.function, &mut self.runtime, input);
+        self.function.insn_store(&mut temp_storage, &res);
+        self.function.insn_branch(&mut done_lbl);
+        self.function.insn_label(&mut array_lbl);
+        let res = emit_array_code(&mut self.function, &mut self.runtime, input);
+        self.function.insn_store(&mut temp_storage, &res);
+        self.function.insn_label(&mut done_lbl);
+        self.function.insn_load(&temp_storage)
     }
 
     pub fn define_all_vars(&mut self, prog: &Stmt) -> Result<HashSet<String>, PrintableError> {
@@ -81,17 +131,14 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
         if typ == AwkT::String {
             return value.pointer.clone();
         }
-        let mut done_lbl = Label::new();
-        self.function.insn_store(&self.binop_scratch.pointer, &value.pointer);
-        let is_string = self.function.insn_eq(&value.tag, &self.string_tag);
-        self.function.insn_branch_if(&is_string, &mut done_lbl);
-
-        let new_string = self.runtime.number_to_string(&mut self.function, value.float.clone());
-        self.function.insn_store(&self.binop_scratch.pointer, &new_string);
-
-        self.function.insn_label(&mut done_lbl);
-        let ptr = self.function.insn_load(&self.binop_scratch.pointer);
-        ptr
+        self.cases(
+            value,
+            typ,
+            true,
+            float_to_string,
+            string_to_string,
+            array_to_string,
+        )
     }
 
     // Free the value in the value pointer if it's a string
@@ -128,6 +175,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
     // Take a value and return an int 0 or 1
     pub fn truthy_ret_integer(&mut self, value: &ValueT, typ: AwkT) -> Value {
         match typ {
+            AwkT::Array => todo!(),
             AwkT::String => {
                 let string_len_offset =
                     std::mem::size_of::<usize>() + std::mem::size_of::<*const u8>();
@@ -173,6 +221,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
         let zero = self.function.create_float64_constant(0.0);
         let str_tag = self.string_tag();
         match typ {
+            AwkT::Array => todo!(),
             AwkT::String => {
                 let ptr = self.runtime.copy_string(&mut self.function, value.pointer);
                 ValueT::new(str_tag, zero, ptr)
@@ -206,7 +255,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 let astr = self.runtime.number_to_string(&mut self.function, a.clone());
                 let bstr = self.runtime.number_to_string(&mut self.function, b.clone());
                 return self.runtime.binop(&mut self.function, astr, bstr, op);
-            },
+            }
         };
         let one = self.function.create_float64_constant(1.0);
         let zero = self.function.create_float64_constant(0.0);

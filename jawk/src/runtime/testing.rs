@@ -2,11 +2,11 @@ use crate::codgen::FLOAT_TAG;
 use crate::columns::Columns;
 use crate::lexer::BinOp;
 use crate::runtime::call_log::{Call, CallLog};
-use crate::runtime::Runtime;
+use crate::runtime::{ErrorCode, Runtime};
 use gnu_libjit::{Context, Function, Value};
 use std::ffi::c_void;
 use std::rc::Rc;
-use regex::Regex;
+use regex::{Error, Regex};
 
 pub const CANARY: &str = "this is the canary!";
 
@@ -211,6 +211,10 @@ extern "C" fn binop(
     res
 }
 
+extern "C" fn print_error(data: *mut std::os::raw::c_void, code: ErrorCode) {
+    eprintln!("error {:?}", code)
+}
+
 extern "C" fn malloc(data: *mut std::os::raw::c_void, num_bytes: usize) -> *mut c_void {
     let data = cast_to_runtime_data(data);
     data.string_out("malloc");
@@ -257,6 +261,7 @@ pub struct TestRuntime {
     realloc: *mut c_void,
     free: *mut c_void,
     helper: *mut c_void,
+    print_error: *mut c_void,
 }
 
 pub struct RuntimeData {
@@ -337,6 +342,7 @@ impl Runtime for TestRuntime {
             realloc: realloc as *mut c_void,
             free: free as *mut c_void,
             helper: helper as *mut c_void,
+            print_error: print_error as *mut c_void,
         };
         println!("binop {:?}", rt.binop);
         rt
@@ -428,6 +434,16 @@ impl Runtime for TestRuntime {
             vec![data_ptr, ptr1, ptr2, binop],
             Some(Context::float64_type()),
         )
+    }
+
+    fn print_error(&mut self, func: &mut Function, error: ErrorCode)  {
+        let binop = func.create_sbyte_constant(error as i8);
+        let data_ptr = self.data_ptr(func);
+        func.insn_call_native(
+            self.print_error,
+            vec![data_ptr, binop],
+            None,
+        );
     }
 }
 
