@@ -5,7 +5,6 @@ use std::fmt::{Display, Formatter};
 pub enum AwkT {
     String,
     Float,
-    Array,
     Variable,
 }
 
@@ -117,7 +116,6 @@ pub enum Expr {
 impl Display for TypedExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.typ {
-            AwkT::Array => write!(f, "(a {})", self.expr),
             AwkT::String => write!(f, "(s {})", self.expr),
             AwkT::Float => write!(f, "(f {})", self.expr),
             AwkT::Variable => write!(f, "(v {})", self.expr),

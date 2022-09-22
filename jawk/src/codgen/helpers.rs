@@ -17,9 +17,21 @@ fn float_to_string<RuntimeT: Runtime>(func: &mut Function, runtime: &mut Runtime
 fn string_to_string<RuntimeT: Runtime>(_func: &mut Function, _runtime: &mut RuntimeT, value: &ValueT) -> Value {
     value.pointer.clone()
 }
-fn array_to_string<RuntimeT: Runtime>(_func: &mut Function, _runtime: &mut RuntimeT, value: &ValueT) -> Value {
-    // TODO: Errors
-    value.pointer.clone()
+
+fn truthy_float<RuntimeT: Runtime>(function: &mut Function, _runtime: &mut RuntimeT, value: &ValueT) -> Value {
+    let zero_f = function.create_float64_constant(0.0);
+    function.insn_ne(&value.float, &zero_f)
+}
+fn truthy_string<RuntimeT: Runtime>(function: &mut Function, _runtime: &mut RuntimeT, value: &ValueT) -> Value {
+    let string_len_offset =
+        std::mem::size_of::<usize>() + std::mem::size_of::<*const u8>();
+    let string_len = function.insn_load_relative(
+        &value.pointer,
+        string_len_offset as c_long,
+        &Context::long_type(),
+    );
+    let zero_ulong = function.create_ulong_constant(0);
+    function.insn_ne(&zero_ulong, &string_len)
 }
 
 impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
@@ -41,33 +53,24 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
         is_ptr: bool,
         emit_float_code: fn(&mut Function, &mut RuntimeT, &ValueT) -> Value,
         emit_string_code: fn(&mut Function, &mut RuntimeT, &ValueT) -> Value,
-        emit_array_code: fn(&mut Function, &mut RuntimeT, &ValueT) -> Value,
     ) -> Value {
         match input_type {
             AwkT::String => return emit_string_code(&mut self.function, &mut self.runtime, input),
             AwkT::Float => return emit_float_code(&mut self.function, &mut self.runtime, input),
-            AwkT::Array => return emit_array_code(&mut self.function, &mut self.runtime, input),
             _ => {}
         }
         let mut temp_storage = if is_ptr { self.binop_scratch.pointer.clone() } else { self.binop_scratch.float.clone() };
+
         let string_tag = self.string_tag();
-        let array_tag = self.string_tag();
         let mut string_lbl = Label::new();
-        let mut array_lbl = Label::new();
         let mut done_lbl = Label::new();
         let is_string = self.function.insn_eq(&input.tag, &string_tag);
         self.function.insn_branch_if(&is_string, &mut string_lbl);
-        let is_array = self.function.insn_eq(&input.tag, &array_tag);
-        self.function.insn_branch_if(&is_array, &mut array_lbl);
         let res = emit_float_code(&mut self.function, &mut self.runtime, input);
         self.function.insn_store(&mut temp_storage, &res);
         self.function.insn_branch(&mut done_lbl);
         self.function.insn_label(&mut string_lbl);
         let res = emit_string_code(&mut self.function, &mut self.runtime, input);
-        self.function.insn_store(&mut temp_storage, &res);
-        self.function.insn_branch(&mut done_lbl);
-        self.function.insn_label(&mut array_lbl);
-        let res = emit_array_code(&mut self.function, &mut self.runtime, input);
         self.function.insn_store(&mut temp_storage, &res);
         self.function.insn_label(&mut done_lbl);
         self.function.insn_load(&temp_storage)
@@ -137,7 +140,6 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
             true,
             float_to_string,
             string_to_string,
-            array_to_string,
         )
     }
 
@@ -174,54 +176,13 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
 
     // Take a value and return an int 0 or 1
     pub fn truthy_ret_integer(&mut self, value: &ValueT, typ: AwkT) -> Value {
-        match typ {
-            AwkT::Array => todo!(),
-            AwkT::String => {
-                let string_len_offset =
-                    std::mem::size_of::<usize>() + std::mem::size_of::<*const u8>();
-                let string_len = self.function.insn_load_relative(
-                    &value.pointer,
-                    string_len_offset as c_long,
-                    &Context::long_type(),
-                );
-                let zero_ulong = self.function.create_ulong_constant(0);
-                self.function.insn_ne(&zero_ulong, &string_len)
-            }
-            AwkT::Float => self.float_is_truthy_ret_int(&value.float),
-            AwkT::Variable => {
-                let mut string_lbl = Label::new();
-                let mut done_lbl = Label::new();
-
-                let one_tag = self.string_tag();
-                let tag_is_one = self.function.insn_eq(&value.tag, &one_tag);
-                self.function.insn_branch_if(&tag_is_one, &mut string_lbl);
-
-                // is float code
-                let is_truthy_f = self.float_is_truthy_ret_int(&value.float);
-                self.function
-                    .insn_store(&self.binop_scratch_int, &is_truthy_f);
-                self.function.insn_branch(&mut done_lbl);
-
-                // is string code
-                self.function.insn_label(&mut string_lbl);
-                let is_truthy_str = self.function.insn_call(
-                    self.subroutines
-                        .string_truthy(&mut self.context, self.runtime),
-                    vec![value.pointer.clone()],
-                );
-                self.function
-                    .insn_store(&self.binop_scratch_int, &is_truthy_str);
-                self.function.insn_label(&mut done_lbl);
-                self.function.insn_load(&self.binop_scratch_int)
-            }
-        }
+        self.cases(value, typ, false, truthy_float, truthy_string)
     }
 
     pub fn copy_if_string(&mut self, value: ValueT, typ: AwkT) -> ValueT {
         let zero = self.function.create_float64_constant(0.0);
         let str_tag = self.string_tag();
         match typ {
-            AwkT::Array => todo!(),
             AwkT::String => {
                 let ptr = self.runtime.copy_string(&mut self.function, value.pointer);
                 ValueT::new(str_tag, zero, ptr)
