@@ -99,6 +99,8 @@ pub enum Expr {
     Call,
     Ternary(Box<TypedExpr>, Box<TypedExpr>, Box<TypedExpr>),
     Regex(String),
+    Index { name: String, indices: Vec<TypedExpr> },
+    InArray { name: String, indices: Vec<TypedExpr>}
 }
 
 impl Display for TypedExpr {
@@ -131,8 +133,23 @@ impl Display for Expr {
                     .collect::<Vec<String>>();
                 let str = vals.join(" ");
                 write!(f, "{}", str)
-            }, 
-            Expr::Regex(str) => write!(f, "\"{}\"", str)
+            }
+            Expr::Regex(str) => write!(f, "\"{}\"", str),
+
+            Expr::Index { name, indices } => {
+                write!(f, "{}[", name)?;
+                for idx in indices {
+                    write!(f, "{},", idx)?;
+                }
+                write!(f, "]")
+            }
+            Expr::InArray { name, indices } => {
+                write!(f, "(")?;
+                for idx in indices {
+                    write!(f, "{},", idx)?;
+                }
+                write!(f, ") in {}", name)
+            }
         }
     }
 }

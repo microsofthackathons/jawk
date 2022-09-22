@@ -91,7 +91,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
             self.function.insn_store(&float_value, &self.zero_f);
 
             let val = ValueT::new(tag, float_value, ptr);
-            self.scopes.insert(var.clone(), val)?;
+            self.scopes.insert_scalar(var.clone(), val)?;
         }
 
         // All string constants like a in `print "a"`; are stored in a variable
@@ -110,7 +110,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
             self.function.insn_store(&float_value, &self.zero_f);
 
             let val = ValueT::new(tag, float_value, ptr);
-            self.scopes.insert(space_in_front, val)?;
+            self.scopes.insert_scalar(space_in_front, val)?;
         }
         Ok(vars)
     }
@@ -232,14 +232,14 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
         self.function.insn_load(&self.binop_scratch.float)
     }
 
-    pub fn compile_exprs_to_string(&mut self, exprs: &Vec<TypedExpr>) -> Vec<Value> {
-        exprs
-            .iter()
-            .map(|v| {
-                let val = self.compile_expr(v);
-                self.to_string(&val, v.typ)
-            })
-            .collect::<Vec<Value>>()
+    pub fn compile_exprs_to_string(&mut self, exprs: &Vec<TypedExpr>) -> Result<Vec<Value>, PrintableError> {
+        let mut expressions = Vec::with_capacity(exprs.len());
+        for expr in exprs {
+            let val = self.compile_expr(expr)?;
+            let string = self.to_string(&val, expr.typ);
+            expressions.push(string)
+        }
+        Ok(expressions)
     }
 
     // Call runtime and combine values. All values MUST be strings.

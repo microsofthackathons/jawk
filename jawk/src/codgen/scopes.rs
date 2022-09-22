@@ -1,29 +1,39 @@
 use crate::codgen::ValuePtrT;
 use crate::printable_error::PrintableError;
 use std::collections::HashMap;
+use gnu_libjit::Value;
+
 
 pub struct Scopes {
-    scopes: HashMap<String, ValuePtrT>,
+    scalars: HashMap<String, ValuePtrT>,
+    arrays: HashMap<String, Value>,
 }
 
 impl Scopes {
     pub fn new() -> Self {
         Scopes {
-            scopes: HashMap::default(),
+            scalars: HashMap::default(),
+            arrays: HashMap::default(),
         }
     }
-    pub fn insert(&mut self, name: String, value: ValuePtrT) -> Result<(), PrintableError> {
-        if let Some(_) = self.scopes.get(&name) {
+    pub fn insert_scalar(&mut self, name: String, value: ValuePtrT) -> Result<(), PrintableError> {
+        if self.arrays.contains_key(&name) {
+            return Err(PrintableError::new(format!("fatal: attempt to use array `{}` in a scalar context", name)))
+        }
+        if let Some(_) = self.scalars.get(&name) {
             return Err(PrintableError::new(format!(
                 "Name {} is already in used, cannot shadow it",
                 name
             )));
         }
-        self.scopes.insert(name, value);
+        self.scalars.insert(name, value);
         Ok(())
     }
 
-    pub fn get(&self, name: &str) -> &ValuePtrT {
-        self.scopes.get(name).unwrap()
+    pub fn get_scalar(&self, name: &str) -> Result<&ValuePtrT, PrintableError> {
+        if self.arrays.contains_key(name) {
+            return Err(PrintableError::new(format!("fatal: attempt to use array `{}` in a scalar context", name)))
+        }
+        Ok(self.scalars.get(name).unwrap())
     }
 }
