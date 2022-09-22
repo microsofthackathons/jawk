@@ -73,5 +73,7 @@ fn extract_expr(expr: &TypedExpr, vars: &mut HashSet<String>, consts: &mut HashS
             extract_expr(expr1, vars, consts);
             extract_expr(expr2, vars, consts);
         }
+        Expr::Index { .. } => {todo!("array exprs")}
+        Expr::InArray { .. } => {todo!("array exprs")}
     }
 }

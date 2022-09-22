@@ -128,6 +128,8 @@ impl TypeAnalysis {
                     self.analyze_expr(val);
                 }
             }
+            Expr::Index { .. } => {todo!("array typing")}
+            Expr::InArray { .. } => {todo!("array typing")}
         }
     }
 

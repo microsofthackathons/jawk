@@ -124,11 +124,13 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
     fn compile(&mut self, prog: Stmt, dump: bool) -> Result<(), PrintableError> {
         let zero = self.function.create_float64_constant(0.0);
         let vars = self.define_all_vars(&prog)?;
+
+        // Compile program
         self.compile_stmt(&prog);
 
         // This is just so # strings allocated == # of strings freed which makes testing easier
         for var in vars {
-            let var_ptrs = self.scopes.get(&var).clone();
+            let var_ptrs = self.scopes.get_scalar(&var)?.clone();
             self.drop_if_string_ptr(&var_ptrs, ScalarType::Variable);
         }
 
@@ -141,14 +143,14 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
         Ok(())
     }
 
-    fn compile_stmt(&mut self, stmt: &Stmt) {
+    fn compile_stmt(&mut self, stmt: &Stmt) -> Result<(), PrintableError> {
         match stmt {
             Stmt::Expr(expr) => {
-                let res = self.compile_expr(expr);
+                let res = self.compile_expr(expr)?;
                 self.drop_if_str(&res, expr.typ);
             }
             Stmt::Print(expr) => {
-                let val = self.compile_expr(expr);
+                let val = self.compile_expr(expr)?;
                 // Optimize print based on static knowledge of type
                 match expr.typ {
                     ScalarType::String => {
@@ -167,12 +169,12 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
             }
             Stmt::Group(group) => {
                 for group in group {
-                    self.compile_stmt(group)
+                    self.compile_stmt(group)?
                 }
             }
             Stmt::If(test, if_so, if_not) => {
                 if let Some(if_not) = if_not {
-                    let test_value = self.compile_expr(test);
+                    let test_value = self.compile_expr(test)?;
                     let bool_value = self.truthy_ret_integer(&test_value, test.typ);
                     self.drop_if_str(&test_value, test.typ);
                     let mut then_lbl = Label::new();
@@ -184,7 +186,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                     self.compile_stmt(if_so);
                     self.function.insn_label(&mut done_lbl);
                 } else {
-                    let test_value = self.compile_expr(test);
+                    let test_value = self.compile_expr(test)?;
                     let bool_value = self.truthy_ret_integer(&test_value, test.typ);
                     self.drop_if_str(&test_value, test.typ);
                     let mut done_lbl = Label::new();
@@ -197,7 +199,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 let mut test_label = Label::new();
                 let mut done_label = Label::new();
                 self.function.insn_label(&mut test_label);
-                let test_value = self.compile_expr(test);
+                let test_value = self.compile_expr(test)?;
                 let bool_value = self.truthy_ret_integer(&test_value, test.typ);
                 self.drop_if_str(&test_value, test.typ);
                 self.function.insn_branch_if_not(&bool_value, &mut done_label);
@@ -206,11 +208,12 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 self.function.insn_label(&mut done_label);
             }
         }
+        Ok(())
     }
 
     // When compile_expr returns a string the caller is responsible for freeing it
-    fn compile_expr(&mut self, expr: &TypedExpr) -> ValueT {
-        match &expr.expr {
+    fn compile_expr(&mut self, expr: &TypedExpr) -> Result<ValueT, PrintableError> {
+        Ok(match &expr.expr {
             Expr::Assign(var, value) => {
                 // BEGIN: Optimization
                 // Optimization to allow reusing the string being assigned to by a string concat operation
@@ -222,16 +225,16 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 // Now concat can re-use the original value since ref count is 1 it's safe to downgrade
                 // from Rc -> Box
                 if let Expr::Concatenation(vars) = &value.expr {
-                    let var_ptrs = self.scopes.get(var).clone();
-                    let strings_to_concat = self.compile_exprs_to_string(vars);
+                    let var_ptrs = self.scopes.get_scalar(var)?.clone();
+                    let strings_to_concat = self.compile_exprs_to_string(vars)?;
                     let old_value = self.load(&var_ptrs);
                     self.drop_if_str(&old_value, ScalarType::Variable);
                     let new_value = self.concat_values(&strings_to_concat);
                     self.store(&var_ptrs, &new_value);
-                    return self.copy_if_string(new_value, ScalarType::Variable);
+                    return Ok(self.copy_if_string(new_value, ScalarType::Variable));
                 }
-                let new_value = self.compile_expr(value);
-                let var_ptrs = self.scopes.get(var).clone();
+                let new_value = self.compile_expr(value)?;
+                let var_ptrs = self.scopes.get_scalar(var)?.clone();
                 let old_value = self.load(&var_ptrs);
                 self.drop_if_str(&old_value, ScalarType::Variable);
                 self.store(&var_ptrs, &new_value);
@@ -246,7 +249,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 // Every string constant is stored in a variable with the name " name"
                 // the space ensures we don't collide with normal variable names;
                 let string_tag = self.string_tag();
-                let var_ptr = self.scopes.get(&format!(" {}", str)).clone();
+                let var_ptr = self.scopes.get_scalar(&format!(" {}", str))?.clone();
                 let var = self.load(&var_ptr);
                 let zero = self.function.create_float64_constant(0.0);
                 let new_ptr = self.runtime.copy_string(&mut self.function, var.pointer);
@@ -256,7 +259,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 // Every string constant is stored in a variable with the name " name"
                 // the space ensures we don't collide with normal variable names;
                 let string_tag = self.string_tag();
-                let var_ptr = self.scopes.get(&format!(" {}", str)).clone();
+                let var_ptr = self.scopes.get_scalar(&format!(" {}", str))?.clone();
                 let var = self.load(&var_ptr);
                 let zero = self.function.create_float64_constant(0.0);
                 let new_ptr = self.runtime.copy_string(&mut self.function, var.pointer);
@@ -264,8 +267,8 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
             }
             Expr::MathOp(left_expr, op, right_expr) => {
                 // Convert left and right to floats if needed and perform the MathOp
-                let mut left = self.compile_expr(left_expr);
-                let mut right = self.compile_expr(right_expr);
+                let mut left = self.compile_expr(left_expr)?;
+                let mut right = self.compile_expr(right_expr)?;
                 let left_float = self.to_float(&left, left_expr.typ);
                 let right_float = self.to_float(&right, right_expr.typ);
                 let result = match op {
@@ -283,18 +286,18 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 ValueT::new(zero, result, self.zero_ptr.clone())
             }
             Expr::BinOp(left_expr, op, right_expr) => {
-                let left = self.compile_expr(left_expr);
-                let right = self.compile_expr(right_expr);
+                let left = self.compile_expr(left_expr)?;
+                let right = self.compile_expr(right_expr)?;
                 let tag = self.float_tag();
 
                 // Optimize the case where we know both are floats
                 match (left_expr.typ, right_expr.typ) {
                     (ScalarType::Float, ScalarType::Float) => {
-                        return ValueT::new(
+                        return Ok(ValueT::new(
                             tag,
                             self.float_binop(&left.float, &right.float, *op),
                             self.zero_ptr.clone(),
-                        );
+                        ));
                     }
                     _ => {}
                 }
@@ -341,11 +344,11 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                     LogicalOp::And => {
                         let mut ret_false = Label::new();
                         let mut done = Label::new();
-                        let left_val = self.compile_expr(left);
+                        let left_val = self.compile_expr(left)?;
                         let l = self.truthy_ret_integer(&left_val, left.typ);
                         self.drop_if_str(&left_val, left.typ);
                         self.function.insn_branch_if_not(&l, &mut ret_false);
-                        let right_val = self.compile_expr(right);
+                        let right_val = self.compile_expr(right)?;
                         let r = self.truthy_ret_integer(&right_val, right.typ);
                         self.drop_if_str(&right_val, right.typ);
                         self.function.insn_branch_if_not(&r, &mut ret_false);
@@ -364,11 +367,11 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                     LogicalOp::Or => {
                         let mut done = Label::new();
                         let mut return_true = Label::new();
-                        let left_val = self.compile_expr(left);
+                        let left_val = self.compile_expr(left)?;
                         let l = self.truthy_ret_integer(&left_val, left.typ);
                         self.drop_if_str(&left_val, left.typ);
                         self.function.insn_branch_if(&l, &mut return_true);
-                        let right_val = self.compile_expr(right);
+                        let right_val = self.compile_expr(right)?;
                         let r = self.truthy_ret_integer(&right_val, right.typ);
                         self.drop_if_str(&right_val, right.typ);
                         self.function.insn_branch_if(&r, &mut return_true);
@@ -391,7 +394,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 // If it's a string we need to call copy_string to update the reference count.
                 // If it's a float no-op.
                 // If type is unknown we check tag then copy_string if needed.
-                let var_ptr = self.scopes.get(var).clone();
+                let var_ptr = self.scopes.get_scalar(var)?.clone();
                 let string_tag = self.string_tag();
                 match expr.typ {
                     ScalarType::String => {
@@ -427,7 +430,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 }
             }
             Expr::Column(col) => {
-                let column = self.compile_expr(col);
+                let column = self.compile_expr(col)?;
                 let val = self.runtime.column(
                     &mut self.function,
                     column.tag.clone(),
@@ -446,31 +449,33 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
             }
             Expr::Concatenation(vars) => {
                 // Eg: a = "a" "b" "c"
-                let compiled = self.compile_exprs_to_string(vars);
+                let compiled = self.compile_exprs_to_string(vars)?;
                 self.concat_values(&compiled)
             }
             Expr::Ternary(cond, expr1, expr2) => {
                 let mut done_lbl = Label::new();
                 let mut truthy_lbl = Label::new();
 
-                let result = self.compile_expr(cond);
+                let result = self.compile_expr(cond)?;
                 let bool_value = self.truthy_ret_integer(&result, cond.typ);
 
                 self.function.insn_branch_if(&bool_value, &mut truthy_lbl);
 
-                let falsy_result = self.compile_expr(expr2);
+                let falsy_result = self.compile_expr(expr2)?;
                 self.store(&self.binop_scratch.clone(), &falsy_result);
                 self.function.insn_branch(&mut done_lbl);
 
                 self.function.insn_label(&mut truthy_lbl);
 
-                let truthy_result = self.compile_expr(expr1);
+                let truthy_result = self.compile_expr(expr1)?;
                 self.store(&self.binop_scratch.clone(), &truthy_result);
 
                 self.function.insn_label(&mut done_lbl);
 
                 self.load(&self.binop_scratch.clone())
             }
-        }
+            Expr::Index { .. } => {todo!("array exprs")}
+            Expr::InArray { .. } => {todo!("array exprs")}
+        })
     }
 }
