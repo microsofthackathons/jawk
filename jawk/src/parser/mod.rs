@@ -329,14 +329,20 @@ impl Parser {
 
     fn regex(&mut self) -> TypedExpr {
         // "a ~ /match/"
-        let mut expr = self.compare();
+        let mut expr = self.array_membership();
         while self.matches(vec![TokenType::MatchedBy, TokenType::NotMatchedBy]) {
             expr = TypedExpr::new(Expr::BinOp(
                 Box::new(expr),
                 if self.previous().unwrap().ttype() == TokenType::MatchedBy {BinOp::MatchedBy} else {BinOp::NotMatchedBy},
-                Box::new(self.compare()),
+                Box::new(self.array_membership()),
             ));
         }
+        expr
+    }
+
+    fn array_membership(&mut self) -> TypedExpr {
+        // <expr> in array_name
+        let mut expr = self.compare();
         expr
     }
 
@@ -365,7 +371,7 @@ impl Parser {
     }
 
     fn string_concat(&mut self) -> TypedExpr {
-        let mut expr = self.comparison();
+        let mut expr = self.plus_minus();
         let not_these = vec![
             TokenType::InplaceAssign,
             TokenType::Less,
@@ -388,15 +394,15 @@ impl Parser {
         ];
         while !self.is_at_end() && !not_these.contains(&self.peek().ttype()) {
             if let Expr::Concatenation(vals) = &mut expr.expr {
-                vals.push(self.comparison());
+                vals.push(self.plus_minus());
             } else {
-                expr = TypedExpr::new(Expr::Concatenation(vec![expr, self.comparison()]));
+                expr = TypedExpr::new(Expr::Concatenation(vec![expr, self.plus_minus()]));
             }
         }
         expr
     }
 
-    fn comparison(&mut self) -> TypedExpr {
+    fn plus_minus(&mut self) -> TypedExpr {
         let mut expr = self.term();
         while self.matches(vec![TokenType::Plus, TokenType::Minus]) {
             let op = match self.previous().unwrap() {
@@ -404,7 +410,7 @@ impl Parser {
                 Token::MathOp(MathOp::Plus) => MathOp::Plus,
                 _ => panic!("Parser bug in comparison function"),
             };
-            expr = Expr::MathOp(Box::new(expr), op, Box::new(self.comparison())).into();
+            expr = Expr::MathOp(Box::new(expr), op, Box::new(self.plus_minus())).into();
         }
         expr
     }
