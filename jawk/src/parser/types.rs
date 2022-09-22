@@ -2,7 +2,7 @@ use crate::lexer::{BinOp, LogicalOp, MathOp};
 use std::fmt::{Display, Formatter};
 
 #[derive(PartialEq, Clone, Copy, Debug)]
-pub enum AwkT {
+pub enum ScalarType {
     String,
     Float,
     Variable,
@@ -48,15 +48,15 @@ pub struct PatternAction {
 }
 
 impl PatternAction {
-    pub fn new(pattern: Option<TypedExpr>, action: Stmt) -> Self {
-        Self { pattern, action }
+    pub fn new<ExprT: Into<Option<TypedExpr>>>(pattern: ExprT, action: Stmt) -> Self {
+        Self { pattern: pattern.into(), action }
     }
     pub fn new_pattern_only(test: TypedExpr) -> PatternAction {
         PatternAction::new(
             Some(test),
-            Stmt::Print(TypedExpr::new_str(Expr::Column(Box::new(
-                TypedExpr::new_num(Expr::NumberF64(0.0)),
-            )))),
+            Stmt::Print(Expr::Column(Box::new(
+                Expr::NumberF64(0.0).into()),
+            ).into()),
         )
     }
     pub fn new_action_only(body: Stmt) -> PatternAction {
@@ -66,26 +66,14 @@ impl PatternAction {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct TypedExpr {
-    pub typ: AwkT,
+    pub typ: ScalarType,
     pub expr: Expr,
 }
 
 impl TypedExpr {
-    pub fn new_num(expr: Expr) -> TypedExpr {
+    pub fn new(expr: Expr) -> TypedExpr {
         TypedExpr {
-            typ: AwkT::Float,
-            expr,
-        }
-    }
-    pub fn new_str(expr: Expr) -> TypedExpr {
-        TypedExpr {
-            typ: AwkT::String,
-            expr,
-        }
-    }
-    pub fn new_var(expr: Expr) -> TypedExpr {
-        TypedExpr {
-            typ: AwkT::Variable,
+            typ: ScalarType::Variable,
             expr,
         }
     }
@@ -93,7 +81,7 @@ impl TypedExpr {
 
 impl Into<TypedExpr> for Expr {
     fn into(self) -> TypedExpr {
-        TypedExpr::new_var(self)
+        TypedExpr::new(self)
     }
 }
 
@@ -116,9 +104,9 @@ pub enum Expr {
 impl Display for TypedExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.typ {
-            AwkT::String => write!(f, "(s {})", self.expr),
-            AwkT::Float => write!(f, "(f {})", self.expr),
-            AwkT::Variable => write!(f, "(v {})", self.expr),
+            ScalarType::String => write!(f, "(s {})", self.expr),
+            ScalarType::Float => write!(f, "(f {})", self.expr),
+            ScalarType::Variable => write!(f, "(v {})", self.expr),
         }
     }
 }

@@ -1,15 +1,15 @@
 use crate::codgen::variable_extract;
-use crate::parser::{AwkT, Stmt, TypedExpr};
+use crate::parser::{ScalarType, Stmt, TypedExpr};
 use crate::Expr;
 use immutable_chunkmap::map::Map;
 
-pub type MapT = Map<String, AwkT, 1000>;
+pub type MapT = Map<String, ScalarType, 1000>;
 
 pub fn analyze(stmt: &mut Stmt) {
     let mut map = MapT::new();
     let (vars, _) = variable_extract::extract(stmt);
     for var in vars {
-        map = map.insert(var, AwkT::String).0;
+        map = map.insert(var, ScalarType::String).0;
     }
     TypeAnalysis { map }.analyze_stmt(stmt)
 }
@@ -67,25 +67,25 @@ impl TypeAnalysis {
     pub fn analyze_expr(&mut self, expr: &mut TypedExpr) {
         match &mut expr.expr {
             Expr::NumberF64(_) => {
-                expr.typ = AwkT::Float;
+                expr.typ = ScalarType::Float;
             }
             Expr::String(_) => {
-                expr.typ = AwkT::String;
+                expr.typ = ScalarType::String;
             }
             Expr::BinOp(left, _op, right) => {
                 self.analyze_expr(left);
                 self.analyze_expr(right);
-                expr.typ = AwkT::Float;
+                expr.typ = ScalarType::Float;
             }
             Expr::MathOp(left, _op, right) => {
                 self.analyze_expr(left);
                 self.analyze_expr(right);
-                expr.typ = AwkT::Float;
+                expr.typ = ScalarType::Float;
             }
             Expr::LogicalOp(left, _op, right) => {
                 self.analyze_expr(left);
                 self.analyze_expr(right);
-                expr.typ = AwkT::Float;
+                expr.typ = ScalarType::Float;
             }
             Expr::Assign(var, value) => {
                 self.analyze_expr(value);
@@ -93,7 +93,7 @@ impl TypeAnalysis {
                 expr.typ = value.typ;
             }
             Expr::Regex(_) => {
-                expr.typ = AwkT::String;
+                expr.typ = ScalarType::String;
             }
             Expr::Ternary(cond, expr1, expr2) => {
 
@@ -114,16 +114,16 @@ impl TypeAnalysis {
                 if let Some(typ) = self.map.get(var) {
                     expr.typ = *typ;
                 } else {
-                    expr.typ = AwkT::String;
+                    expr.typ = ScalarType::String;
                 }
             }
             Expr::Column(col) => {
-                expr.typ = AwkT::String;
+                expr.typ = ScalarType::String;
                 self.analyze_expr(col);
             }
-            Expr::Call => expr.typ = AwkT::Float,
+            Expr::Call => expr.typ = ScalarType::Float,
             Expr::Concatenation(vals) => {
-                expr.typ = AwkT::String;
+                expr.typ = ScalarType::String;
                 for val in vals {
                     self.analyze_expr(val);
                 }
@@ -149,11 +149,11 @@ impl TypeAnalysis {
         }
         merged
     }
-    fn merge_types(a: &AwkT, b: &AwkT) -> AwkT {
+    fn merge_types(a: &ScalarType, b: &ScalarType) -> ScalarType {
         match (a, b) {
-            (AwkT::Float, AwkT::Float) => AwkT::Float,
-            (AwkT::String, AwkT::String) => AwkT::String,
-            _ => AwkT::Variable,
+            (ScalarType::Float, ScalarType::Float) => ScalarType::Float,
+            (ScalarType::String, ScalarType::String) => ScalarType::String,
+            _ => ScalarType::Variable,
         }
     }
 }
