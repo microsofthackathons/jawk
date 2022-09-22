@@ -39,7 +39,9 @@ fn main() {
     let mut ast = transform(parse(lex(&program).unwrap()));
 
     // 4
-    analyze(&mut ast);
+    if let Err(err) = analyze(&mut ast) {
+        eprintln!("{}", err);
+    }
 
     if args.debug {
         println!("{:?}", ast);

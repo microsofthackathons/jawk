@@ -134,6 +134,8 @@ impl Lexer {
             self.add_token(Token::End);
         } else if src == "print" {
             self.add_token(Token::Print);
+        } else if src == "in" {
+            self.add_token(Token::In);
         } else {
             self.add_token(Token::Ident(src));
         }
@@ -266,6 +268,9 @@ impl Lexer {
             ':' => self.add_token(Token::Colon),
             '{' => self.add_token(Token::LeftBrace),
             '}' => self.add_token(Token::RightBrace),
+            '[' => self.add_token(Token::LeftBracket),
+            ']' => self.add_token(Token::RightBracket),
+            ',' => self.add_token(Token::Comma),
             '(' => self.add_token(Token::LeftParen),
             ')' => self.add_token(Token::RightParen),
             ';' => self.add_token(Token::Semicolon),
@@ -707,6 +712,42 @@ fn test_regex_slash_not() {
             Token::Ident(String::from("a")),
             Token::BinOp(BinOp::NotMatchedBy),
             Token::Regex(String::from("match")),
+            Token::EOF
+        ]
+    );
+}
+
+
+#[test]
+fn test_array_ops_slash_not() {
+    let str = "a[0] = 1; a[1,2,3,4] = 5; 6 in a";
+    let a = Token::Ident(String::from("a"));
+    assert_eq!(
+        lex(str).unwrap(),
+        vec![
+            a.clone(),
+            Token::LeftBracket,
+            Token::NumberF64(0.0),
+            Token::RightBracket,
+            Token::Eq,
+            Token::NumberF64(1.0),
+            Token::Semicolon,
+            a.clone(),
+            Token::LeftBracket,
+            Token::NumberF64(1.0),
+            Token::Comma,
+            Token::NumberF64(2.0),
+            Token::Comma,
+            Token::NumberF64(3.0),
+            Token::Comma,
+            Token::NumberF64(4.0),
+            Token::RightBracket,
+            Token::Eq,
+            Token::NumberF64(5.0),
+            Token::Semicolon,
+            Token::NumberF64(6.0),
+            Token::In,
+            a,
             Token::EOF
         ]
     );

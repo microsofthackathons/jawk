@@ -78,8 +78,8 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
 
     pub fn define_all_vars(&mut self, prog: &Stmt) -> Result<HashSet<String>, PrintableError> {
         // All variables are init'ed to the empty string.
-        let (vars, string_constants) = variable_extract::extract(prog);
-        for var in &vars {
+        let extractor_results = variable_extract::extract(prog);
+        for var in &extractor_results.vars {
             let tag = self.function.create_value_int();
             self.function.insn_store(&tag, &self.string_tag);
 
@@ -96,7 +96,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
 
         // All string constants like a in `print "a"`; are stored in a variable
         // the name of the variable is " a". Just a space in front to prevent collisions.
-        for str_const in string_constants {
+        for str_const in extractor_results.str_consts {
             let space_in_front = format!(" {}", str_const);
             let tag = self.function.create_value_int();
             self.function.insn_store(&tag, &self.string_tag);
@@ -112,7 +112,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
             let val = ValueT::new(tag, float_value, ptr);
             self.scopes.insert_scalar(space_in_front, val)?;
         }
-        Ok(vars)
+        Ok(extractor_results.vars)
     }
 
     pub fn float_is_truthy_ret_int(&mut self, value: &Value) -> Value {
