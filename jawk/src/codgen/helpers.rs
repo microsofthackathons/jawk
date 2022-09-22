@@ -1,7 +1,7 @@
 use crate::codgen::scopes::Scopes;
 use crate::codgen::subroutines::Subroutines;
 use crate::lexer::{BinOp, LogicalOp, MathOp};
-use crate::parser::{AwkT, Stmt, TypedExpr};
+use crate::parser::{ScalarType, Stmt, TypedExpr};
 use crate::printable_error::PrintableError;
 use crate::runtime::{LiveRuntime, Runtime, TestRuntime};
 use crate::Expr;
@@ -49,14 +49,14 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
     pub fn cases(
         &mut self,
         input: &ValueT,
-        input_type: AwkT,
+        input_type: ScalarType,
         is_ptr: bool,
         emit_float_code: fn(&mut Function, &mut RuntimeT, &ValueT) -> Value,
         emit_string_code: fn(&mut Function, &mut RuntimeT, &ValueT) -> Value,
     ) -> Value {
         match input_type {
-            AwkT::String => return emit_string_code(&mut self.function, &mut self.runtime, input),
-            AwkT::Float => return emit_float_code(&mut self.function, &mut self.runtime, input),
+            ScalarType::String => return emit_string_code(&mut self.function, &mut self.runtime, input),
+            ScalarType::Float => return emit_float_code(&mut self.function, &mut self.runtime, input),
             _ => {}
         }
         let mut temp_storage = if is_ptr { self.binop_scratch.pointer.clone() } else { self.binop_scratch.float.clone() };
@@ -120,8 +120,8 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
         self.function.insn_ne(&value, &zero_f)
     }
 
-    pub fn to_float(&mut self, value: &ValueT, typ: AwkT) -> Value {
-        if typ == AwkT::Float {
+    pub fn to_float(&mut self, value: &ValueT, typ: ScalarType) -> Value {
+        if typ == ScalarType::Float {
             return value.float.clone();
         }
         self.function.insn_call(
@@ -130,8 +130,8 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
         )
     }
 
-    pub fn to_string(&mut self, value: &ValueT, typ: AwkT) -> Value {
-        if typ == AwkT::String {
+    pub fn to_string(&mut self, value: &ValueT, typ: ScalarType) -> Value {
+        if typ == ScalarType::String {
             return value.pointer.clone();
         }
         self.cases(
@@ -144,8 +144,8 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
     }
 
     // Free the value in the value pointer if it's a string
-    pub fn drop_if_string_ptr(&mut self, value: &ValuePtrT, typ: AwkT) {
-        if let AwkT::Float = typ {
+    pub fn drop_if_string_ptr(&mut self, value: &ValuePtrT, typ: ScalarType) {
+        if let ScalarType::Float = typ {
             return;
         }
         let value = self.load(&value);
@@ -153,12 +153,12 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
     }
 
     // Free the value if it's a string
-    pub fn drop_if_str(&mut self, value: &ValueT, typ: AwkT) {
+    pub fn drop_if_str(&mut self, value: &ValueT, typ: ScalarType) {
         match typ {
-            AwkT::String => {
+            ScalarType::String => {
                 self.drop(&value.pointer);
             }
-            AwkT::Variable => {
+            ScalarType::Variable => {
                 let str_tag = self.string_tag();
                 let mut done_lbl = Label::new();
                 let is_string = self.function.insn_eq(&str_tag, &value.tag);
@@ -175,20 +175,20 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
     }
 
     // Take a value and return an int 0 or 1
-    pub fn truthy_ret_integer(&mut self, value: &ValueT, typ: AwkT) -> Value {
+    pub fn truthy_ret_integer(&mut self, value: &ValueT, typ: ScalarType) -> Value {
         self.cases(value, typ, false, truthy_float, truthy_string)
     }
 
-    pub fn copy_if_string(&mut self, value: ValueT, typ: AwkT) -> ValueT {
+    pub fn copy_if_string(&mut self, value: ValueT, typ: ScalarType) -> ValueT {
         let zero = self.function.create_float64_constant(0.0);
         let str_tag = self.string_tag();
         match typ {
-            AwkT::String => {
+            ScalarType::String => {
                 let ptr = self.runtime.copy_string(&mut self.function, value.pointer);
                 ValueT::new(str_tag, zero, ptr)
             }
-            AwkT::Float => value, // Float copy is a no-op
-            AwkT::Variable => {
+            ScalarType::Float => value, // Float copy is a no-op
+            ScalarType::Variable => {
                 // If type unknown, check tag and call runtime if it's a string
                 let mut done = Label::new();
                 let is_string = self.function.insn_eq(&str_tag, &value.tag);

@@ -2,7 +2,7 @@ mod types;
 
 use crate::lexer::{BinOp, LogicalOp, MathOp, Token, TokenType};
 pub use crate::parser::types::PatternAction;
-pub use types::{AwkT, Expr, Program, Stmt, TypedExpr};
+pub use types::{ScalarType, Expr, Program, Stmt, TypedExpr};
 
 // Pattern Action Type
 // Normal eg: $1 == "a" { doSomething() }
@@ -196,7 +196,7 @@ impl Parser {
                 panic!("Expected identifier before '='")
             };
             self.consume(TokenType::Eq, "Expected '=' after identifier");
-            Stmt::Expr(TypedExpr::new_var(Expr::Assign(
+            Stmt::Expr(TypedExpr::new(Expr::Assign(
                 str,
                 Box::new(self.expression()),
             )))
@@ -265,17 +265,17 @@ impl Parser {
         if let Expr::Variable(var) = &lhs.expr {
             let var = var.clone();
             if self.matches(vec![TokenType::Eq]) {
-                return TypedExpr::new_var(Expr::Assign(var, Box::new(self.assignment())));
+                return TypedExpr::new(Expr::Assign(var, Box::new(self.assignment())));
             } else if self.matches(vec![TokenType::InplaceAssign]) {
                 if let Token::InplaceEq(math_op) = self.previous().unwrap() {
                     let expr = Expr::MathOp(
-                        Box::new(TypedExpr::new_var(Expr::Variable(var.to_string()))),
+                        Box::new(TypedExpr::new(Expr::Variable(var.to_string()))),
                         math_op,
                         Box::new(self.assignment()),
                     );
-                    return TypedExpr::new_var(Expr::Assign(
+                    return TypedExpr::new(Expr::Assign(
                         var.to_string(),
-                        Box::new(TypedExpr::new_var(expr)),
+                        Box::new(TypedExpr::new(expr)),
                     ));
                 } else {
                     panic!("not possible")
@@ -294,7 +294,7 @@ impl Parser {
                 "Expected a colon after question mark in a ternary!",
             );
             let expr2 = self.ternary();
-            return TypedExpr::new_var(Expr::Ternary(
+            return TypedExpr::new(Expr::Ternary(
                 Box::new(cond),
                 Box::new(expr1),
                 Box::new(expr2),
@@ -306,7 +306,7 @@ impl Parser {
     fn logical_or(&mut self) -> TypedExpr {
         let mut expr = self.logical_and();
         while self.matches(vec![TokenType::Or]) {
-            expr = TypedExpr::new_var(Expr::LogicalOp(
+            expr = TypedExpr::new(Expr::LogicalOp(
                 Box::new(expr),
                 LogicalOp::Or,
                 Box::new(self.logical_and()),
@@ -318,7 +318,7 @@ impl Parser {
     fn logical_and(&mut self) -> TypedExpr {
         let mut expr = self.regex();
         while self.matches(vec![TokenType::And]) {
-            expr = TypedExpr::new_var(Expr::LogicalOp(
+            expr = TypedExpr::new(Expr::LogicalOp(
                 Box::new(expr),
                 LogicalOp::And,
                 Box::new(self.regex()),
@@ -331,7 +331,7 @@ impl Parser {
         // "a ~ /match/"
         let mut expr = self.compare();
         while self.matches(vec![TokenType::MatchedBy, TokenType::NotMatchedBy]) {
-            expr = TypedExpr::new_var(Expr::BinOp(
+            expr = TypedExpr::new(Expr::BinOp(
                 Box::new(expr),
                 if self.previous().unwrap().ttype() == TokenType::MatchedBy {BinOp::MatchedBy} else {BinOp::NotMatchedBy},
                 Box::new(self.compare()),
@@ -390,7 +390,7 @@ impl Parser {
             if let Expr::Concatenation(vals) = &mut expr.expr {
                 vals.push(self.comparison());
             } else {
-                expr = TypedExpr::new_var(Expr::Concatenation(vec![expr, self.comparison()]));
+                expr = TypedExpr::new(Expr::Concatenation(vec![expr, self.comparison()]));
             }
         }
         expr
@@ -432,8 +432,8 @@ impl Parser {
         {
             let p = self.previous().unwrap().ttype();
             let rhs = self.unary();
-            let one = TypedExpr::new_var(Expr::NumberF64(1.0));
-            let zero = TypedExpr::new_var(Expr::NumberF64(0.0));
+            let one = TypedExpr::new(Expr::NumberF64(1.0));
+            let zero = TypedExpr::new(Expr::NumberF64(0.0));
             return match p {
                 TokenType::Bang => Expr::BinOp(Box::new(one), BinOp::BangEq, Box::new(rhs)),
                 TokenType::Plus => Expr::MathOp(Box::new(zero), MathOp::Plus, Box::new(rhs)),
@@ -550,7 +550,7 @@ impl Parser {
         let mut expr = self.primary();
         for _ in 0..num_cols {
             // If this isn't a col we loop 0 times and just return primary
-            expr = TypedExpr::new_var(Expr::Column(Box::new(expr)));
+            expr = TypedExpr::new(Expr::Column(Box::new(expr)));
         }
 
         expr
@@ -612,7 +612,7 @@ macro_rules! btexpr {
 #[cfg(test)]
 macro_rules! texpr {
     ($value:expr) => {
-        TypedExpr::new_var($value)
+        TypedExpr::new($value)
     };
 }
 

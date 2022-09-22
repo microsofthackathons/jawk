@@ -18,7 +18,7 @@ pub fn transform(program: parser::Program) -> Stmt {
     }
     if every_line_stms.len() > 0 {
         let line_loop = Stmt::While(
-            TypedExpr::new_num(Expr::Call),
+            TypedExpr::new(Expr::Call),
             Box::new(Stmt::Group(every_line_stms)),
         );
         prog.push(line_loop);

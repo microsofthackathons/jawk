@@ -12,7 +12,7 @@ mod helpers;
 use crate::codgen::scopes::Scopes;
 use crate::codgen::subroutines::Subroutines;
 use crate::lexer::{BinOp, LogicalOp, MathOp};
-use crate::parser::{AwkT, Stmt, TypedExpr};
+use crate::parser::{ScalarType, Stmt, TypedExpr};
 use crate::printable_error::PrintableError;
 use crate::runtime::{LiveRuntime, Runtime, TestRuntime};
 use crate::Expr;
@@ -129,7 +129,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
         // This is just so # strings allocated == # of strings freed which makes testing easier
         for var in vars {
             let var_ptrs = self.scopes.get(&var).clone();
-            self.drop_if_string_ptr(&var_ptrs, AwkT::Variable);
+            self.drop_if_string_ptr(&var_ptrs, ScalarType::Variable);
         }
 
         self.function.insn_return(&zero);
@@ -151,14 +151,14 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 let val = self.compile_expr(expr);
                 // Optimize print based on static knowledge of type
                 match expr.typ {
-                    AwkT::String => {
+                    ScalarType::String => {
                         self.runtime.print_string(&mut self.function, val.pointer.clone());
                         self.drop(&val.pointer);
                     }
-                    AwkT::Float => {
+                    ScalarType::Float => {
                         self.runtime.print_float(&mut self.function, val.float);
                     }
-                    AwkT::Variable => {
+                    ScalarType::Variable => {
                         let str = self.to_string(&val, expr.typ);
                         self.runtime.print_string(&mut self.function, str.clone());
                         self.runtime.free_string(&mut self.function, str);
@@ -225,15 +225,15 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                     let var_ptrs = self.scopes.get(var).clone();
                     let strings_to_concat = self.compile_exprs_to_string(vars);
                     let old_value = self.load(&var_ptrs);
-                    self.drop_if_str(&old_value, AwkT::Variable);
+                    self.drop_if_str(&old_value, ScalarType::Variable);
                     let new_value = self.concat_values(&strings_to_concat);
                     self.store(&var_ptrs, &new_value);
-                    return self.copy_if_string(new_value, AwkT::Variable);
+                    return self.copy_if_string(new_value, ScalarType::Variable);
                 }
                 let new_value = self.compile_expr(value);
                 let var_ptrs = self.scopes.get(var).clone();
                 let old_value = self.load(&var_ptrs);
-                self.drop_if_str(&old_value, AwkT::Variable);
+                self.drop_if_str(&old_value, ScalarType::Variable);
                 self.store(&var_ptrs, &new_value);
                 self.copy_if_string(new_value, value.typ)
             }
@@ -289,7 +289,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
 
                 // Optimize the case where we know both are floats
                 match (left_expr.typ, right_expr.typ) {
-                    (AwkT::Float, AwkT::Float) => {
+                    (ScalarType::Float, ScalarType::Float) => {
                         return ValueT::new(
                             tag,
                             self.float_binop(&left.float, &right.float, *op),
@@ -394,13 +394,13 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 let var_ptr = self.scopes.get(var).clone();
                 let string_tag = self.string_tag();
                 match expr.typ {
-                    AwkT::String => {
+                    ScalarType::String => {
                         let var = self.load(&var_ptr);
                         let zero = self.function.create_float64_constant(0.0);
                         let new_ptr = self.runtime.copy_string(&mut self.function, var.pointer);
                         ValueT::new(string_tag, zero, new_ptr)
                     }
-                    AwkT::Variable => {
+                    ScalarType::Variable => {
                         // If it's a string variable copy it and store that pointer in self.binop_scratch.pointer
                         // otherwise store zero self.binop_scratch.pointer. After this load self.binop_scratch.pointer
                         // and make a new value with the old tag/float + new string pointer.
@@ -423,7 +423,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                         let str_ptr = self.function.insn_load(&self.binop_scratch.pointer);
                         ValueT::new(var.tag, var.float, str_ptr)
                     }
-                    AwkT::Float => self.load(&var_ptr),
+                    ScalarType::Float => self.load(&var_ptr),
                 }
             }
             Expr::Column(col) => {
