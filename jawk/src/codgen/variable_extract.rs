@@ -3,77 +3,88 @@ use crate::Expr;
 use std::collections::HashSet;
 
 // Returns 0. the list of all variables  1. All string constants
-pub fn extract(prog: &Stmt) -> (HashSet<String>, HashSet<String>) {
-    let mut vars = HashSet::new();
-    let mut string_constants = HashSet::new();
-    extract_stmt(prog, &mut vars, &mut string_constants);
-    (vars, string_constants)
+pub struct ExtractResults {
+    pub vars: HashSet<String>,
+    pub str_consts: HashSet<String>,
+    pub arrays: HashSet<String>
+}
+struct Extractor {
+    results: ExtractResults
 }
 
-fn extract_stmt(stmt: &Stmt, vars: &mut HashSet<String>, consts: &mut HashSet<String>) {
-    match stmt {
-        Stmt::Expr(expr) => extract_expr(expr, vars, consts),
-        Stmt::Print(expr) => extract_expr(expr, vars, consts),
-        Stmt::Group(group) => {
-            for elem in group {
-                extract_stmt(elem, vars, consts);
+pub fn extract(prog: &Stmt) -> ExtractResults {
+    let results = ExtractResults { vars: HashSet::default(), str_consts: HashSet::default(), arrays: HashSet::default() };
+    let mut extractor = Extractor { results };
+    extractor.extract_stmt(prog);
+    extractor.results
+}
+
+impl Extractor {
+    fn extract_stmt(&mut self, stmt: &Stmt) {
+        match stmt {
+            Stmt::Expr(expr) => self.extract_expr(expr),
+            Stmt::Print(expr) => self.extract_expr(expr),
+            Stmt::Group(group) => {
+                for elem in group {
+                    self.extract_stmt(elem);
+                }
             }
-        }
-        Stmt::If(test, if_block, else_block) => {
-            extract_expr(test, vars, consts);
-            extract_stmt(if_block, vars, consts);
-            if let Some(else_block) = else_block {
-                extract_stmt(else_block, vars, consts);
+            Stmt::If(test, if_block, else_block) => {
+                self.extract_expr(test);
+                self.extract_stmt(if_block);
+                if let Some(else_block) = else_block {
+                    self.extract_stmt(else_block);
+                }
             }
-        }
-        Stmt::While(test, body) => {
-            extract_expr(test, vars, consts);
-            extract_stmt(body, vars, consts);
+            Stmt::While(test, body) => {
+                self.extract_expr(test);
+                self.extract_stmt(body);
+            }
         }
     }
-}
 
-fn extract_expr(expr: &TypedExpr, vars: &mut HashSet<String>, consts: &mut HashSet<String>) {
-    match &expr.expr {
-        Expr::Variable(var) => {
-            vars.insert(var.clone());
-        }
-        Expr::String(str) => {
-            consts.insert(str.to_string());
-        }
-        Expr::Regex(str) => {
-            consts.insert(str.to_string());
-        }
-        Expr::NumberF64(_n) => {}
-        Expr::BinOp(left, _op, right) => {
-            extract_expr(left, vars, consts);
-            extract_expr(right, vars, consts);
-        }
-        Expr::MathOp(left, _op, right) => {
-            extract_expr(left, vars, consts);
-            extract_expr(right, vars, consts);
-        }
-        Expr::LogicalOp(left, _op, right) => {
-            extract_expr(left, vars, consts);
-            extract_expr(right, vars, consts);
-        }
-        Expr::Column(col) => extract_expr(col, vars, consts),
-        Expr::Call => {}
-        Expr::Assign(var, value) => {
-            vars.insert(var.clone());
-            extract_expr(value, vars, consts);
-        }
-        Expr::Concatenation(vals) => {
-            for val in vals {
-                extract_expr(val, vars, consts);
+    fn extract_expr(&mut self, expr: &TypedExpr) {
+        match &expr.expr {
+            Expr::Variable(var) => {
+                self.results.vars.insert(var.clone());
             }
+            Expr::String(str) => {
+                self.results.str_consts.insert(str.to_string());
+            }
+            Expr::Regex(str) => {
+                self.results.str_consts.insert(str.to_string());
+            }
+            Expr::NumberF64(_n) => {}
+            Expr::BinOp(left, _op, right) => {
+                self.extract_expr(left);
+                self.extract_expr(right);
+            }
+            Expr::MathOp(left, _op, right) => {
+                self.extract_expr(left);
+                self.extract_expr(right);
+            }
+            Expr::LogicalOp(left, _op, right) => {
+                self.extract_expr(left);
+                self.extract_expr(right);
+            }
+            Expr::Column(col) => self.extract_expr(col),
+            Expr::Call => {}
+            Expr::Assign(var, value) => {
+                self.results.vars.insert(var.clone());
+                self.extract_expr(value);
+            }
+            Expr::Concatenation(vals) => {
+                for val in vals {
+                    self.extract_expr(val);
+                }
+            }
+            Expr::Ternary(cond, expr1, expr2) => {
+                self.extract_expr(cond);
+                self.extract_expr(expr1);
+                self.extract_expr(expr2);
+            }
+            Expr::Index { .. } => { todo!("array exprs") }
+            Expr::InArray { .. } => { todo!("array exprs") }
         }
-        Expr::Ternary(cond, expr1, expr2) => {
-            extract_expr(cond, vars, consts);
-            extract_expr(expr1, vars, consts);
-            extract_expr(expr2, vars, consts);
-        }
-        Expr::Index { .. } => {todo!("array exprs")}
-        Expr::InArray { .. } => {todo!("array exprs")}
     }
 }

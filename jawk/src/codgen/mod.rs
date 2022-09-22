@@ -291,15 +291,8 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 let tag = self.float_tag();
 
                 // Optimize the case where we know both are floats
-                match (left_expr.typ, right_expr.typ) {
-                    (ScalarType::Float, ScalarType::Float) => {
-                        return Ok(ValueT::new(
-                            tag,
-                            self.float_binop(&left.float, &right.float, *op),
-                            self.zero_ptr.clone(),
-                        ));
-                    }
-                    _ => {}
+                if left_expr.typ == ScalarType::Float && right_expr.typ == ScalarType::Float {
+                    return Ok(ValueT::new(tag, self.float_binop(&left.float, &right.float, *op), self.zero_ptr.clone(), ));
                 }
 
                 let left_is_float = self.function.insn_eq(&tag, &left.tag);
@@ -313,12 +306,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 // String/Float Float/String String/String case
                 let left_as_string = self.to_string(&left, left_expr.typ);
                 let right_as_string = self.to_string(&right, right_expr.typ);
-                let res = self.runtime.binop(
-                    &mut self.function,
-                    left_as_string.clone(),
-                    right_as_string.clone(),
-                    *op,
-                );
+                let res = self.runtime.binop(&mut self.function, left_as_string.clone(), right_as_string.clone(), *op, );
                 let result = ValueT::new(self.float_tag.clone(), res, self.zero_ptr.clone());
                 self.store(&self.binop_scratch.clone(), &result);
                 self.drop(&left_as_string);
@@ -352,12 +340,10 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                         let r = self.truthy_ret_integer(&right_val, right.typ);
                         self.drop_if_str(&right_val, right.typ);
                         self.function.insn_branch_if_not(&r, &mut ret_false);
-                        self.function
-                            .insn_store(&self.binop_scratch.float, &float_1);
+                        self.function.insn_store(&self.binop_scratch.float, &float_1);
                         self.function.insn_branch(&mut done);
                         self.function.insn_label(&mut ret_false);
-                        self.function
-                            .insn_store(&self.binop_scratch.float, &float_0);
+                        self.function.insn_store(&self.binop_scratch.float, &float_0);
                         self.function.insn_branch(&mut done);
                         self.function.insn_label(&mut done);
                         let tag = self.float_tag();
@@ -375,12 +361,10 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                         let r = self.truthy_ret_integer(&right_val, right.typ);
                         self.drop_if_str(&right_val, right.typ);
                         self.function.insn_branch_if(&r, &mut return_true);
-                        self.function
-                            .insn_store(&self.binop_scratch.float, &float_0);
+                        self.function.insn_store(&self.binop_scratch.float, &float_0);
                         self.function.insn_branch(&mut done);
                         self.function.insn_label(&mut return_true);
-                        self.function
-                            .insn_store(&self.binop_scratch.float, &float_1);
+                        self.function.insn_store(&self.binop_scratch.float, &float_1);
                         self.function.insn_label(&mut done);
                         let tag = self.float_tag();
                         let result_f = self.function.insn_load(&self.binop_scratch.float);
@@ -411,16 +395,13 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                         let is_not_str = self.function.insn_eq(&string_tag, &var.tag);
                         let mut done_lbl = Label::new();
                         let mut is_not_str_lbl = Label::new();
-                        self.function
-                            .insn_branch_if_not(&is_not_str, &mut is_not_str_lbl);
+                        self.function.insn_branch_if_not(&is_not_str, &mut is_not_str_lbl);
                         let new_ptr = self.runtime.copy_string(&mut self.function, var.pointer);
-                        self.function
-                            .insn_store(&self.binop_scratch.pointer, &new_ptr);
+                        self.function.insn_store(&self.binop_scratch.pointer, &new_ptr);
                         self.function.insn_branch(&mut done_lbl);
 
                         self.function.insn_label(&mut is_not_str_lbl);
-                        self.function
-                            .insn_store(&self.binop_scratch.pointer, &self.zero_ptr);
+                        self.function.insn_store(&self.binop_scratch.pointer, &self.zero_ptr);
 
                         self.function.insn_label(&mut done_lbl);
                         let str_ptr = self.function.insn_load(&self.binop_scratch.pointer);
@@ -474,8 +455,8 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
 
                 self.load(&self.binop_scratch.clone())
             }
-            Expr::Index { .. } => {todo!("array exprs")}
-            Expr::InArray { .. } => {todo!("array exprs")}
+            Expr::Index { .. } => { todo!("array exprs") }
+            Expr::InArray { .. } => { todo!("array exprs") }
         })
     }
 }
