@@ -110,6 +110,7 @@ pub enum Expr {
     Column(Box<TypedExpr>),
     Call,
     Ternary(Box<TypedExpr>, Box<TypedExpr>, Box<TypedExpr>),
+    Regex(String),
 }
 
 impl Display for TypedExpr {
@@ -142,7 +143,8 @@ impl Display for Expr {
                     .collect::<Vec<String>>();
                 let str = vals.join(" ");
                 write!(f, "{}", str)
-            }
+            }, 
+            Expr::Regex(str) => write!(f, "\"{}\"", str)
         }
     }
 }

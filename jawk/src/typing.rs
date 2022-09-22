@@ -92,6 +92,9 @@ impl TypeAnalysis {
                 self.map = self.map.insert(var.clone(), value.typ).0;
                 expr.typ = value.typ;
             }
+            Expr::Regex(_) => {
+                expr.typ = AwkT::String;
+            }
             Expr::Ternary(cond, expr1, expr2) => {
 
                 self.analyze_expr(cond);

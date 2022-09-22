@@ -431,6 +431,16 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 let new_ptr = self.runtime.copy_string(&mut self.function, var.pointer);
                 ValueT::new(string_tag, zero, new_ptr)
             }
+            Expr::Regex(str) => {
+                // Every string constant is stored in a variable with the name " name"
+                // the space ensures we don't collide with normal variable names;
+                let string_tag = self.string_tag();
+                let var_ptr = self.scopes.get(&format!(" {}", str)).clone();
+                let var = self.load(&var_ptr);
+                let zero = self.function.create_float64_constant(0.0);
+                let new_ptr = self.runtime.copy_string(&mut self.function, var.pointer);
+                ValueT::new(string_tag, zero, new_ptr)
+            }
             Expr::MathOp(left_expr, op, right_expr) => {
                 // Convert left and right to floats if needed and perform the MathOp
                 let mut left = self.compile_expr(left_expr);
@@ -651,8 +661,11 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
             BinOp::LessEq => self.function.insn_le(a, b),
             BinOp::BangEq => self.function.insn_ne(a, b),
             BinOp::EqEq => self.function.insn_eq(a, b),
-            BinOp::MatchedBy => todo!("regex for float??"),
-            BinOp::NotMatchedBy => todo!("regex for float??"),
+            BinOp::MatchedBy | BinOp::NotMatchedBy => {
+                let astr = self.runtime.number_to_string(&mut self.function, a.clone());
+                let bstr = self.runtime.number_to_string(&mut self.function, b.clone());
+                return self.runtime.binop(&mut self.function, astr, bstr, op);
+            },
         };
         let one = self.function.create_float64_constant(1.0);
         let zero = self.function.create_float64_constant(0.0);
