@@ -455,8 +455,15 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
 
                 self.load(&self.binop_scratch.clone())
             }
-            Expr::ArrayIndex { .. } => { todo!("array exprs") }
-            Expr::InArray { .. } => { todo!("array exprs") }
+            Expr::ArrayIndex { .. } => {
+                todo!("array exprs")
+            }
+            Expr::InArray { .. } => {
+                todo!("array exprs")
+            }
+            Expr::ArrayAssign { .. } => {
+                todo!("array assign")
+            }
         })
     }
 }

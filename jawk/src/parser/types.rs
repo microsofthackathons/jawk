@@ -88,6 +88,7 @@ impl Into<TypedExpr> for Expr {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Expr {
     ScalarAssign(String, Box<TypedExpr>),
+    ArrayAssign { name: String, indices: Vec<TypedExpr>, value: Box<TypedExpr> },
     NumberF64(f64),
     String(String),
     Concatenation(Vec<TypedExpr>),
@@ -100,7 +101,7 @@ pub enum Expr {
     Ternary(Box<TypedExpr>, Box<TypedExpr>, Box<TypedExpr>),
     Regex(String),
     ArrayIndex { name: String, indices: Vec<TypedExpr> },
-    InArray { name: String, indices: Vec<TypedExpr>}
+    InArray { name: String, indices: Vec<TypedExpr> },
 }
 
 impl Display for TypedExpr {
@@ -149,6 +150,13 @@ impl Display for Expr {
                     write!(f, "{},", idx)?;
                 }
                 write!(f, ") in {}", name)
+            }
+            Expr::ArrayAssign { name, indices, value } => {
+                write!(f, "{}[", name)?;
+                for idx in indices {
+                    write!(f, "{},", idx)?;
+                }
+                write!(f, "] = {}", value)
             }
         }
     }
