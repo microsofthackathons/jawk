@@ -15,6 +15,10 @@ fn main() {
 
     env::set_current_dir(path.to_str().expect("expect libjit to exist in cargo outdir")).expect("expected libjit to exist in out dir");
 
+    let bootstrap_path = path.join("bootstrap");
+    let configure_path= path.join("configure");
+    Command::new("chmod").args(&["+x", bootstrap_path.to_str().unwrap()]).output().expect("to make bootstrap executable");
+    Command::new("chmod").args(&["+x", configure_path.to_str().unwrap()]).output().expect("to make bootstrap executable");
     Command::new("./bootstrap")
         .output().expect("Failed to run `./bootstrap` installing libjit");
     Command::new("./configure")
