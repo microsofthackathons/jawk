@@ -148,10 +148,6 @@ extern void RE_poscl(MACHINE *);
 extern void RE_01(MACHINE *);
 extern void RE_panic(const char *) GCC_NORETURN;
 
-#ifndef MAWK_H
-extern char *str_str(char *, size_t, char *, size_t);
-#endif
-
 extern void RE_lex_init(char *, size_t);
 extern int RE_lex(MACHINE *);
 extern void RE_run_stack_init(void);

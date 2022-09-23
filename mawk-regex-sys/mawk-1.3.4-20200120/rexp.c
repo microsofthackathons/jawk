@@ -259,7 +259,7 @@ void
 RE_panic(const char *s)
 {
     fprintf(stderr, "REcompile() - panic:  %s\n", s);
-    mawk_exit(100);
+//    mawk_exit(100); TODO: WE should actually panic or something
 }
 
 /* getting regexp error message */

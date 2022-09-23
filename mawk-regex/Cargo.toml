@@ -1,0 +1,12 @@
+[package]
+name = "mawk-regex"
+version = "0.0.0"
+edition = "2021"
+license = ""
+homepage = "https://github.com/n8ta/jawk"
+repository = "https://github.com/n8ta/jawk"
+description = "A safe rust wrapper around mawk's regular expressions"
+
+[dependencies]
+mawk-regex-sys = { path = "../mawk-regex-sys" }
+libc = "0.2"

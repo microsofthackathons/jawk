@@ -15,11 +15,14 @@ fn main() {
 
     Command::new("./configure")
         .output().expect("Failed to run `./configure while installing mawk");
-    Command::new("make")
+    Command::new("make").args(&["regexp.o"])
         .output().expect("Failed to run `make` while installing mawk");
 
+    let regexpo_path = path.join("regexp.o");
+    let libregexpso_path = path.join("libregexp.so");
+    Command::new("mv").args(&[regexpo_path, libregexpso_path]).output().expect("to be able to move regexp.o to libregex.so");
 
     println!("cargo:rustc-link-search={}", path.to_str().expect("mawk outdir to exist"));
-    println!("cargo:rustc-link-lib=static=regexp.o");
+    println!("cargo:rustc-link-lib=regexp");
     println!("cargo:rerun-if-changed=build.rs");
 }

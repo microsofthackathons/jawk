@@ -32,6 +32,77 @@ RT_POS_ENTRY *RE_pos_stack_base;
 RT_POS_ENTRY *RE_pos_stack_limit;
 RT_POS_ENTRY *RE_pos_stack_empty;
 
+
+void
+da_string(FILE *fp, const char *str, size_t len)
+{
+    size_t n;
+
+    fputc('"', fp);
+    for (n = 0; n < len; ++n) {
+        UChar ch = (UChar) str[n];
+        switch (ch) {
+            case '\\':
+                fprintf(fp, "\\\\");
+                break;
+            case '"':
+                fprintf(fp, "\"");
+                break;
+            default:
+                if (ch >= 32 && ch < 127)
+                    fprintf(fp, "%c", ch);
+                else
+                    fprintf(fp, "\\%03o", ch);
+                break;
+        }
+    }
+    fputc('"', fp);
+}
+
+char *
+str_str(char *target, size_t target_len, const char *key, size_t key_len)
+{
+    register int k = key[0];
+    int k1;
+    const char *prior;
+    char *result = 0;
+
+    switch (key_len) {
+        case 0:
+            break;
+        case 1:
+            if (target_len != 0) {
+                result = memchr(target, k, target_len);
+            }
+            break;
+        case 2:
+            k1 = key[1];
+            prior = target;
+            while (target_len >= key_len && (target = memchr(target, k, target_len))) {
+                target_len = target_len - (size_t) (target - prior) - 1;
+                prior = ++target;
+                if (target[0] == k1) {
+                    result = target - 1;
+                    break;
+                }
+            }
+            break;
+        default:
+            key_len--;
+            prior = target;
+            while (target_len > key_len && (target = memchr(target, k, target_len))) {
+                target_len = target_len - (size_t) (target - prior) - 1;
+                prior = ++target;
+                if (memcmp(target, key + 1, key_len) == 0) {
+                    result = target - 1;
+                    break;
+                }
+            }
+            break;
+    }
+    return result;
+}
+
 void
 RE_run_stack_init(void)
 {
@@ -80,13 +151,13 @@ RE_new_run_stack(void)
 	RE_run_stack_base = (RT_STATE *) realloc(RE_run_stack_base,
 						 newsize * sizeof(RT_STATE));
 
-    if (!RE_run_stack_base) {
-	fprintf(stderr, "out of memory for RE run time stack\n");
-	/* this is pretty unusual, I've only seen it happen on
-	   weird input to REmatch() under 16bit DOS , the same
-	   situation worked easily on 32bit machine.  */
-	mawk_exit(100);
-    }
+//    if (!RE_run_stack_base) {
+//	fprintf(stderr, "out of memory for RE run time stack\n");
+//	/* this is pretty unusual, I've only seen it happen on
+//	   weird input to REmatch() under 16bit DOS , the same
+//	   situation worked easily on 32bit machine.  */
+//	mawk_exit(100);
+//    }
 
     RE_run_stack_limit = RE_run_stack_base + newsize;
     RE_run_stack_empty = RE_run_stack_base - 1;
@@ -107,10 +178,10 @@ RE_new_pos_stack(void)
     RE_pos_stack_base = (RT_POS_ENTRY *)
 	realloc(RE_pos_stack_base, newsize * sizeof(RT_POS_ENTRY));
 
-    if (!RE_pos_stack_base) {
-	fprintf(stderr, "out of memory for RE string position stack\n");
-	mawk_exit(100);
-    }
+//    if (!RE_pos_stack_base) {
+//	fprintf(stderr, "out of memory for RE string position stack\n");
+//	mawk_exit(100);
+//    }
 
     RE_pos_stack_limit = RE_pos_stack_base + newsize;
     RE_pos_stack_empty = RE_pos_stack_base;
