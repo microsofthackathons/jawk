@@ -46,20 +46,39 @@ fn test_against(interpreter: &str, prog: &str, oracle_output: &str, file: &PathB
     analyze(&mut ast);
 
     let files = vec![file.to_str().unwrap().to_string()];
-    let ours = compile_and_capture(ast, files.as_slice()).unwrap();
+    let ours = compile_and_capture(ast, &files).unwrap().output();
+    let output = test_once(interpreter, prog, file);
 
-    let output = test_once(interpreter, prog, file).0;
     assert_eq!(
-        ours.output(),
-        output,
+        ours,
+        output.0,
         "LEFT jawk, RIGHT {} stdout didnt match",
         interpreter
     );
     assert_eq!(
-        ours.output(),
+        ours,
         oracle_output,
         "LEFT jawk, RIGHT expected-output, stdout didn't match"
     );
+}
+
+const PERF_RUNS: u128 = 10;
+
+fn test_perf(interpreter: &str, prog: &str, file: &PathBuf) {
+    match std::process::Command::new(interpreter).output() {
+        Ok(_) => {}
+        Err(err) => return, // this interpreter doesn't exist
+    }
+    let mut our_total = 0;
+    let mut other_total = 0;
+    for _ in 0..PERF_RUNS {
+        other_total += test_once(interpreter, prog, file).1.as_micros();
+        our_total += test_once("./target/release/jawk", prog, file).1.as_micros();
+    }
+    our_total /= PERF_RUNS;
+    other_total /= PERF_RUNS;
+
+    assert!(our_total < other_total || our_total < 5*1000, "jawk={}ms {}={}ms", our_total/1000, interpreter, other_total/1000);
 }
 
 fn test_it<S: AsRef<str>>(prog: &str, file: S, oracle_output: &str) {
@@ -71,7 +90,6 @@ fn test_it<S: AsRef<str>>(prog: &str, file: S, oracle_output: &str) {
     let temp_dir = tempdir().unwrap();
     let file_path = temp_dir.path().join("tmp");
     std::fs::write(file_path.clone(), file.as_ref()).unwrap();
-
     let file_path_string = file_path.to_str().unwrap().to_string();
     let res = compile_and_capture(ast, &[file_path_string]).unwrap();
     let string_in = res.strings_in();
@@ -86,6 +104,14 @@ fn test_it<S: AsRef<str>>(prog: &str, file: S, oracle_output: &str) {
     test_against("mawk", prog, oracle_output, &file_path);
     test_against("goawk", prog, oracle_output, &file_path);
     test_against("onetrueawk", prog, oracle_output, &file_path);
+
+    if std::env::vars().any(|f| f.0 == "jperf" && (f.1 == "true" || f.1 == "true\n")) {
+
+        test_perf("awk", prog, &file_path);
+        test_perf("mawk", prog, &file_path);
+        test_perf("goawk", prog, &file_path);
+        test_perf("onetrueawk", prog, &file_path);
+    }
 }
 
 macro_rules! test {

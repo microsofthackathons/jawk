@@ -103,23 +103,23 @@ extern "C" fn binop(
         BinOp::BangEq => left != right,
         BinOp::EqEq => left == right,
         BinOp::MatchedBy => {
-            let reg = match data.regexCache.get_mut(&*right) {
+            let reg = match data.regex_cache.get_mut(&*right) {
                 Some(cachedRegex) => cachedRegex,
                 None => {
                     let RE = Regex::new(&right);
-                    data.regexCache.insert((&*right).clone(), RE);
-                    data.regexCache.get_mut(&*right).unwrap()
+                    data.regex_cache.insert((&*right).clone(), RE);
+                    data.regex_cache.get_mut(&*right).unwrap()
                 }
             };
             reg.matches(&left)
         },
         BinOp::NotMatchedBy => {
-            let reg = match data.regexCache.get_mut(&*right) {
+            let reg = match data.regex_cache.get_mut(&*right) {
                 Some(cachedRegex) => cachedRegex,
                 None => {
                     let RE = Regex::new(&right);
-                    data.regexCache.insert((&*right).clone(), RE);
-                    data.regexCache.get_mut(&*right).unwrap()
+                    data.regex_cache.insert((&*right).clone(), RE);
+                    data.regex_cache.get_mut(&*right).unwrap()
                 }
             };
             !reg.matches(&left)
@@ -211,7 +211,7 @@ pub struct RuntimeData {
     columns: Columns,
     buffer: String,
     stdout: BufWriter<StdoutLock<'static>>,
-    regexCache: LruCache<String, Regex>
+    regex_cache: LruCache<String, Regex>
 }
 
 impl RuntimeData {
@@ -220,7 +220,7 @@ impl RuntimeData {
             buffer: String::with_capacity(1000),
             columns: Columns::new(files),
             stdout: BufWriter::new(std::io::stdout().lock()),
-            regexCache: LruCache::new(10)
+            regex_cache: LruCache::new(10)
         }
     }
 }

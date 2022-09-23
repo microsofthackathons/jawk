@@ -42,7 +42,6 @@ cargo run -- --debug 'BEGIN { print "this will print debug info including the AS
 7. Redirect output to file
    - close() function
 8. Missing Operators
-   - !logical_not, unary +a -b
    - expr in array a in b
 9. Parsing / Lexing negative numbers
 10. ARGV / ARGC and other ENV vars
@@ -69,3 +68,5 @@ Tests look in ./target/release/jawk for a binary to do perf comparisons so you n
 ```
 cargo test
 ```
+
+If you want to run perf tests set the env var "jperf" to "true" and do a `cargo build --release` and `cargo test -- --test-threads=1` first. This will test the speed of the release binary against other awks.
