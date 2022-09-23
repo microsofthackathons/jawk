@@ -8,6 +8,7 @@ use std::fmt::{Write as FmtWrite};
 use std::io::{BufWriter, StdoutLock, Write};
 use std::rc::Rc;
 use regex::{Error, Regex};
+use std::collections::HashMap;
 
 // Live runtime used by most programs.
 // A pointer to the runtime data is provided for all calls but only used for some.
@@ -85,13 +86,14 @@ extern "C" fn empty_string(_data_ptr: *mut c_void) -> *const String {
 }
 
 extern "C" fn binop(
-    _dat: *mut c_void,
+    data: *mut c_void,
     l_ptr: *const String,
     r_ptr: *const String,
     binop: BinOp,
 ) -> std::os::raw::c_double {
     let left = unsafe { Rc::from_raw(l_ptr) };
     let right = unsafe { Rc::from_raw(r_ptr) };
+    let data = cast_to_runtime_data(data);
 
     let res = match binop {
         BinOp::Greater => left > right,
@@ -101,13 +103,27 @@ extern "C" fn binop(
         BinOp::BangEq => left != right,
         BinOp::EqEq => left == right,
         BinOp::MatchedBy => {
-            let RE = Regex::new(&right).unwrap();
-            RE.is_match(&left)
-        }
+            let reg = match data.regexCache.get(&*right) {
+                Some(cachedRegex) => cachedRegex,
+                None => {
+                    let RE = Regex::new(&right).unwrap();
+                    data.regexCache.insert((&*right).clone(), RE);
+                    data.regexCache.get(&*right).unwrap()
+                }
+            };
+            reg.is_match(&left)
+        },
         BinOp::NotMatchedBy => {
-            let RE = Regex::new(&right).unwrap();
-            !RE.is_match(&left)
-        }
+            let reg = match data.regexCache.get(&*right) {
+                Some(cachedRegex) => cachedRegex,
+                None => {
+                    let RE = Regex::new(&right).unwrap();
+                    data.regexCache.insert((&*right).clone(), RE);
+                    data.regexCache.get(&*right).unwrap()
+                }
+            };
+            !reg.is_match(&left)
+        },
     };
     let res = if res { 1.0 } else { 0.0 };
     Rc::into_raw(left);
@@ -199,6 +215,7 @@ pub struct RuntimeData {
     columns: Columns,
     buffer: String,
     stdout: BufWriter<StdoutLock<'static>>,
+    regexCache: HashMap<String, Regex>
 }
 
 impl RuntimeData {
@@ -207,6 +224,7 @@ impl RuntimeData {
             buffer: String::with_capacity(1000),
             columns: Columns::new(files),
             stdout: BufWriter::new(std::io::stdout().lock()),
+            regexCache: HashMap::new()
         }
     }
 }
