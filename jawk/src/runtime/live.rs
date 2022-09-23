@@ -7,8 +7,8 @@ use std::ffi::c_void;
 use std::fmt::{Write as FmtWrite};
 use std::io::{BufWriter, StdoutLock, Write};
 use std::rc::Rc;
-use std::collections::HashMap;
 use mawk_regex::Regex;
+use lru_cache::LruCache;
 
 // Live runtime used by most programs.
 // A pointer to the runtime data is provided for all calls but only used for some.
@@ -103,23 +103,23 @@ extern "C" fn binop(
         BinOp::BangEq => left != right,
         BinOp::EqEq => left == right,
         BinOp::MatchedBy => {
-            let reg = match data.regexCache.get(&*right) {
+            let reg = match data.regexCache.get_mut(&*right) {
                 Some(cachedRegex) => cachedRegex,
                 None => {
                     let RE = Regex::new(&right);
                     data.regexCache.insert((&*right).clone(), RE);
-                    data.regexCache.get(&*right).unwrap()
+                    data.regexCache.get_mut(&*right).unwrap()
                 }
             };
             reg.matches(&left)
         },
         BinOp::NotMatchedBy => {
-            let reg = match data.regexCache.get(&*right) {
+            let reg = match data.regexCache.get_mut(&*right) {
                 Some(cachedRegex) => cachedRegex,
                 None => {
                     let RE = Regex::new(&right);
                     data.regexCache.insert((&*right).clone(), RE);
-                    data.regexCache.get(&*right).unwrap()
+                    data.regexCache.get_mut(&*right).unwrap()
                 }
             };
             !reg.matches(&left)
@@ -211,7 +211,7 @@ pub struct RuntimeData {
     columns: Columns,
     buffer: String,
     stdout: BufWriter<StdoutLock<'static>>,
-    regexCache: HashMap<String, Regex>
+    regexCache: LruCache<String, Regex>
 }
 
 impl RuntimeData {
@@ -220,7 +220,7 @@ impl RuntimeData {
             buffer: String::with_capacity(1000),
             columns: Columns::new(files),
             stdout: BufWriter::new(std::io::stdout().lock()),
-            regexCache: HashMap::new()
+            regexCache: LruCache::new(10)
         }
     }
 }
