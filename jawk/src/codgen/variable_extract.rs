@@ -6,14 +6,14 @@ use std::collections::HashSet;
 pub struct ExtractResults {
     pub vars: HashSet<String>,
     pub str_consts: HashSet<String>,
-    pub arrays: HashSet<String>
 }
+
 struct Extractor {
-    results: ExtractResults
+    results: ExtractResults,
 }
 
 pub fn extract(prog: &Stmt) -> ExtractResults {
-    let results = ExtractResults { vars: HashSet::default(), str_consts: HashSet::default(), arrays: HashSet::default() };
+    let results = ExtractResults { vars: HashSet::default(), str_consts: HashSet::default() };
     let mut extractor = Extractor { results };
     extractor.extract_stmt(prog);
     extractor.results
@@ -83,8 +83,21 @@ impl Extractor {
                 self.extract_expr(expr1);
                 self.extract_expr(expr2);
             }
-            Expr::ArrayIndex { .. } => { todo!("array exprs") }
-            Expr::InArray { .. } => { todo!("array exprs") }
+            Expr::ArrayIndex { name, indices } => {
+                for idx in indices {
+                    self.extract_expr(idx);
+                }
+            }
+            Expr::InArray { indices, name } => {
+                for idx in indices {
+                    self.extract_expr(idx);
+                }
+            }
+            Expr::ArrayAssign { name, indices, value } => {
+                for idx in indices {
+                    self.extract_expr(idx);
+                }
+            }
         }
     }
 }

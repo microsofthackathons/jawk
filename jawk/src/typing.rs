@@ -160,8 +160,25 @@ impl TypeAnalysis {
                     self.analyze_expr(val)?;
                 }
             }
-            Expr::ArrayIndex { .. } => {todo!("array typing")}
-            Expr::InArray { .. } => {todo!("array typing")}
+            Expr::ArrayIndex { indices, name } => {
+                self.use_as_array(name)?;
+                for idx in indices {
+                    self.analyze_expr(idx)?;
+                }
+            }
+            Expr::InArray { indices, name } => {
+                self.use_as_array(name)?;
+                for idx in indices {
+                    self.analyze_expr(idx)?;
+                }
+            }
+            Expr::ArrayAssign { indices, name, value } => {
+                self.use_as_array(name)?;
+                for idx in indices {
+                    self.analyze_expr(idx)?;
+                }
+                self.analyze_expr(value)?;
+            }
         };
         Ok(())
     }

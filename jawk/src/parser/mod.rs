@@ -257,12 +257,12 @@ impl Parser {
     }
 
     fn expression(&mut self) -> TypedExpr {
-        self.assignment().into()
+        self.assignment()
     }
 
     fn assignment(&mut self) -> TypedExpr {
-        let lhs = self.ternary();
-        if let Expr::Variable(var) = &lhs.expr {
+        let mut expr = self.ternary();
+        if let Expr::Variable(var) = &expr.expr {
             let var = var.clone();
             if self.matches(vec![TokenType::Eq]) {
                 // =
@@ -280,7 +280,19 @@ impl Parser {
                     Box::new(expr.into())).into();
             }
         }
-        lhs
+        let mut is_array_index = false;
+        if let Expr::ArrayIndex { .. } = &expr.expr {
+            is_array_index = true;
+        }
+        if is_array_index && self.matches(vec![TokenType::Eq]) {
+            if let Expr::ArrayIndex { name, indices } = expr.expr {
+                let value = Box::new(self.assignment());
+                return Expr::ArrayAssign { name, indices, value }.into();
+            } else {
+                unreachable!()
+            }
+        }
+        expr
     }
 
     fn ternary(&mut self) -> TypedExpr {
@@ -616,7 +628,7 @@ impl Parser {
             Token::Ident(name) => {
                 self.consume(TokenType::Ident, "Expected to parse an ident here");
                 if self.matches(vec![TokenType::LeftBracket]) {
-                    self.helper_array_assignment(name)
+                    self.array_index(name)
                 } else {
                     Expr::Variable(name).into()
                 }
@@ -633,7 +645,7 @@ impl Parser {
         }
     }
 
-    fn helper_array_assignment(&mut self, name: String) -> TypedExpr {
+    fn array_index(&mut self, name: String) -> TypedExpr {
         let mut indices = vec![self.expression()];
         while self.matches(vec![TokenType::Comma]) && self.peek().ttype() != TokenType::RightBracket {
             indices.push(self.expression());
@@ -1245,7 +1257,6 @@ fn array_access() {
 }
 
 
-
 #[test]
 fn array_access_multi() {
     actual!(actual, "{ a[0,1,2,3] }");
@@ -1276,8 +1287,15 @@ fn array_access_nested() {
 #[test]
 fn array_access_assign() {
     actual!(actual, "{ a[0] = 1 }");
-    let expr = texpr!(Expr::ArrayIndex{name: "a".to_string(),indices: vec![Expr::NumberF64(0.0).into()]});
-    let outer = texpr!(Expr::ArrayIndex {name: "a".to_string(), indices: vec![expr]});
-    assert_eq!(actual, sprogram!(Stmt::Expr(outer)));
+    let expr = texpr!(Expr::ArrayAssign{name: "a".to_string(),indices: vec![Expr::NumberF64(0.0).into()], value: bnum!(1.0)});
+    assert_eq!(actual, sprogram!(Stmt::Expr(expr)));
+}
+
+
+#[test]
+fn array_access_assign_multi_dim() {
+    actual!(actual, "{ a[0,2] = 1 }");
+    let expr = Expr::ArrayAssign { name: "a".to_string(), indices: vec![num!(0.0), num!(2.0)], value: Box::new(num!(1.0)) }.into();
+    assert_eq!(actual, sprogram!(Stmt::Expr(expr)));
 }
 
