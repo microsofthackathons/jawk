@@ -63,10 +63,11 @@ Install other awks to test against (they should be on your path with these exact
 3. [goawk](https://github.com/benhoyt/goawk) - need the go toolchain, then go get
 4. [onetrueawk](https://github.com/onetrueawk/awk) - super easy and fast build from src
 
-Tests look in ./target/release/jawk for a binary to do perf comparisons so you need to do a release build to run the tests.
+Tests by default just check correctness against other awks and oracle result.
 
 ```
 cargo test
 ```
 
+### Perf tests
 If you want to run perf tests set the env var "jperf" to "true" and do a `cargo build --release` and `cargo test -- --test-threads=1` first. This will test the speed of the release binary against other awks.
