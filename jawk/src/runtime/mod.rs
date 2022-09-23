@@ -8,6 +8,13 @@ pub use live::LiveRuntime;
 use std::ffi::c_void;
 pub use testing::TestRuntime;
 
+#[repr(C)]
+#[derive(Debug)]
+pub enum ErrorCode {
+    Error1,
+    Error2
+}
+
 pub trait Runtime {
     fn new(files: Vec<String>) -> Self;
     fn call_next_line(&mut self, func: &mut Function) -> Value;
@@ -21,4 +28,5 @@ pub trait Runtime {
     fn concat(&mut self, func: &mut Function, ptr1: Value, ptr2: Value) -> Value;
     fn empty_string(&mut self, func: &mut Function) -> Value;
     fn binop(&mut self, func: &mut Function, ptr1: Value, ptr2: Value, binop: BinOp) -> Value;
+    fn print_error(&mut self, func: &mut Function, code: ErrorCode);
 }

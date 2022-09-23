@@ -30,8 +30,10 @@ use std::rc::Rc;
 ///     string: *mut c_void
 /// }
 
+
 pub const FLOAT_TAG: u8 = 0;
 pub const STRING_TAG: u8 = 1;
+pub const ARRAY_TAG: u8 = 1;
 
 // Entry point to run a program
 pub fn compile_and_run(prog: Stmt, files: &[String]) -> Result<(), PrintableError> {
@@ -149,6 +151,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 let val = self.compile_expr(expr);
                 // Optimize print based on static knowledge of type
                 match expr.typ {
+                    AwkT::Array => todo!(),
                     AwkT::String => {
                         self.runtime.print_string(&mut self.function, val.pointer.clone());
                         self.drop(&val.pointer);
@@ -392,6 +395,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 let var_ptr = self.scopes.get(var).clone();
                 let string_tag = self.string_tag();
                 match expr.typ {
+                    AwkT::Array => todo!(),
                     AwkT::String => {
                         let var = self.load(&var_ptr);
                         let zero = self.function.create_float64_constant(0.0);

@@ -1,7 +1,7 @@
 use crate::codgen::FLOAT_TAG;
 use crate::columns::Columns;
 use crate::lexer::BinOp;
-use crate::runtime::Runtime;
+use crate::runtime::{ErrorCode, Runtime};
 use gnu_libjit::{Context, Function, Value};
 use std::ffi::c_void;
 use std::fmt::{Write as FmtWrite};
@@ -29,7 +29,7 @@ pub extern "C" fn print_string(data: *mut c_void, value: *mut String) {
 pub extern "C" fn print_float(data: *mut c_void, value: f64) {
     let data = cast_to_runtime_data(data);
 
-    data.stdout.write_fmt( format_args!("{}\n", value)).unwrap();
+    data.stdout.write_fmt(format_args!("{}\n", value)).unwrap();
     // data.stdout.write_all( value.to_string().as_str().as_bytes()).unwrap();
 
     // data.stdout.write_all(value.to_string().as_bytes()).expect("failed to write to stdout");
@@ -103,6 +103,7 @@ extern "C" fn binop(
         BinOp::BangEq => left != right,
         BinOp::EqEq => left == right,
         BinOp::MatchedBy => {
+<<<<<<< HEAD
             let reg = match data.regex_cache.get_mut(&*right) {
                 Some(cachedRegex) => cachedRegex,
                 None => {
@@ -124,6 +125,15 @@ extern "C" fn binop(
             };
             !reg.matches(&left)
         },
+=======
+            let RE = Regex::new(&right).unwrap();
+            RE.is_match(&left)
+        }
+        BinOp::NotMatchedBy => {
+            let RE = Regex::new(&right).unwrap();
+            !RE.is_match(&left)
+        }
+>>>>>>> 4f57f0d (helper)
     };
     let res = if res { 1.0 } else { 0.0 };
     Rc::into_raw(left);
@@ -161,6 +171,9 @@ extern "C" fn copy_string(_data: *mut c_void, ptr: *mut String) -> *const String
     Rc::into_raw(copy)
 }
 
+extern "C" fn print_error(data: *mut std::os::raw::c_void, code: ErrorCode) {
+    eprintln!("error {:?}", code)
+}
 extern "C" fn malloc(_data: *mut std::os::raw::c_void, num_bytes: usize) -> *mut c_void {
     unsafe { libc::malloc(num_bytes) as *mut c_void }
 }
@@ -195,6 +208,7 @@ pub struct LiveRuntime {
     pub concat: *mut c_void,
     pub binop: *mut c_void,
     pub empty_string: *mut c_void,
+    pub print_error: *mut c_void,
 }
 
 impl Drop for LiveRuntime {
@@ -211,7 +225,10 @@ pub struct RuntimeData {
     columns: Columns,
     buffer: String,
     stdout: BufWriter<StdoutLock<'static>>,
+<<<<<<< HEAD
     regex_cache: LruCache<String, Regex>
+=======
+>>>>>>> 4f57f0d (helper)
 }
 
 impl RuntimeData {
@@ -255,6 +272,7 @@ impl Runtime for LiveRuntime {
             print_float: print_float as *mut c_void,
             empty_string: empty_string as *mut c_void,
             binop: binop as *mut c_void,
+            print_error: print_error as *mut c_void,
         }
     }
 
@@ -344,6 +362,16 @@ impl Runtime for LiveRuntime {
             vec![data_ptr, ptr1, ptr2, binop],
             Some(Context::float64_type()),
         )
+    }
+
+    fn print_error(&mut self, func: &mut Function, error: ErrorCode) {
+        let binop = func.create_sbyte_constant(error as i8);
+        let data_ptr = self.data_ptr(func);
+        func.insn_call_native(
+            self.print_error,
+            vec![data_ptr, binop],
+            None,
+        );
     }
 }
 
