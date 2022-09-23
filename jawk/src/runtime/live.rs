@@ -86,13 +86,14 @@ extern "C" fn empty_string(_data_ptr: *mut c_void) -> *const String {
 }
 
 extern "C" fn binop(
-    _dat: *mut c_void,
+    data: *mut c_void,
     l_ptr: *const String,
     r_ptr: *const String,
     binop: BinOp,
 ) -> std::os::raw::c_double {
     let left = unsafe { Rc::from_raw(l_ptr) };
     let right = unsafe { Rc::from_raw(r_ptr) };
+    let data = cast_to_runtime_data(data);
 
     let res = match binop {
         BinOp::Greater => left > right,
@@ -102,30 +103,26 @@ extern "C" fn binop(
         BinOp::BangEq => left != right,
         BinOp::EqEq => left == right,
         BinOp::MatchedBy => {
-            let data = cast_to_runtime_data(_dat);
-            match data.regexCache.get(&right as &str) {
-                Some(cachedRegex) => {
-                    cachedRegex.is_match(&left)
-                } ,
+            let reg = match data.regexCache.get(&*right) {
+                Some(cachedRegex) => cachedRegex,
                 None => {
                     let RE = Regex::new(&right).unwrap();
-                    data.regexCache.insert((&right).to_string(), RE.clone());
-                    RE.is_match(&left)
+                    data.regexCache.insert((&*right).clone(), RE);
+                    data.regexCache.get(&*right).unwrap()
                 }
-            }
+            };
+            reg.is_match(&left)
         },
         BinOp::NotMatchedBy => {
-            let data = cast_to_runtime_data(_dat);
-            match data.regexCache.get(&right as &str) {
-                Some(cachedRegex) => {
-                    !cachedRegex.is_match(&left)
-                } ,
+            let reg = match data.regexCache.get(&*right) {
+                Some(cachedRegex) => cachedRegex,
                 None => {
                     let RE = Regex::new(&right).unwrap();
-                    data.regexCache.insert((&right).to_string(), RE.clone());
-                    !RE.is_match(&left)
+                    data.regexCache.insert((&*right).clone(), RE);
+                    data.regexCache.get(&*right).unwrap()
                 }
-            }
+            };
+            !reg.is_match(&left)
         },
     };
     let res = if res { 1.0 } else { 0.0 };
