@@ -6,7 +6,7 @@ use crate::runtime::Runtime;
 use gnu_libjit::{Context, Function, Value};
 use std::ffi::c_void;
 use std::rc::Rc;
-use regex::Regex;
+use mawk_regex::Regex;
 
 pub const CANARY: &str = "this is the canary!";
 
@@ -193,12 +193,12 @@ extern "C" fn binop(
         BinOp::BangEq => left != right,
         BinOp::EqEq => left == right,
         BinOp::MatchedBy => {
-            let RE = Regex::new(&right).unwrap();
-            RE.is_match(&left)
+            let RE = Regex::new(&right);
+            RE.matches(&left)
         },
         BinOp::NotMatchedBy => {
-            let RE = Regex::new(&right).unwrap();
-            !RE.is_match(&left)
+            let RE = Regex::new(&right);
+            !RE.matches(&left)
         },
     };
     let res = if res { 1.0 } else { 0.0 };

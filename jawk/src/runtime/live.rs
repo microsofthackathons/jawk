@@ -7,8 +7,8 @@ use std::ffi::c_void;
 use std::fmt::{Write as FmtWrite};
 use std::io::{BufWriter, StdoutLock, Write};
 use std::rc::Rc;
-use regex::Regex;
 use std::collections::HashMap;
+use mawk_regex::Regex;
 
 // Live runtime used by most programs.
 // A pointer to the runtime data is provided for all calls but only used for some.
@@ -106,23 +106,23 @@ extern "C" fn binop(
             let reg = match data.regexCache.get(&*right) {
                 Some(cachedRegex) => cachedRegex,
                 None => {
-                    let RE = Regex::new(&right).unwrap();
+                    let RE = Regex::new(&right);
                     data.regexCache.insert((&*right).clone(), RE);
                     data.regexCache.get(&*right).unwrap()
                 }
             };
-            reg.is_match(&left)
+            reg.matches(&left)
         },
         BinOp::NotMatchedBy => {
             let reg = match data.regexCache.get(&*right) {
                 Some(cachedRegex) => cachedRegex,
                 None => {
-                    let RE = Regex::new(&right).unwrap();
+                    let RE = Regex::new(&right);
                     data.regexCache.insert((&*right).clone(), RE);
                     data.regexCache.get(&*right).unwrap()
                 }
             };
-            !reg.is_match(&left)
+            !reg.matches(&left)
         },
     };
     let res = if res { 1.0 } else { 0.0 };

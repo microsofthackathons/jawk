@@ -5,10 +5,10 @@ edition = "2021"
 
 [dependencies]
 gnu-libjit = { path = "../gnu-libjit" }
+mawk-regex = { path = "../mawk-regex" }
 immutable-chunkmap = "1.0.4"
 tempfile = "3.3.0"
 libc = "0.2.127"
-regex = "1"
 
 [[bin]]
 name = "jawk"
