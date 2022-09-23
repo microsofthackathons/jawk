@@ -69,7 +69,7 @@ impl Extractor {
             }
             Expr::Column(col) => self.extract_expr(col),
             Expr::Call => {}
-            Expr::Assign(var, value) => {
+            Expr::ScalarAssign(var, value) => {
                 self.results.vars.insert(var.clone());
                 self.extract_expr(value);
             }
@@ -83,7 +83,7 @@ impl Extractor {
                 self.extract_expr(expr1);
                 self.extract_expr(expr2);
             }
-            Expr::Index { .. } => { todo!("array exprs") }
+            Expr::ArrayIndex { .. } => { todo!("array exprs") }
             Expr::InArray { .. } => { todo!("array exprs") }
         }
     }

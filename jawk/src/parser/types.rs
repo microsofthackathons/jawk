@@ -87,8 +87,7 @@ impl Into<TypedExpr> for Expr {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Expr {
-    Assign(String, Box<TypedExpr>),
-    AssignToArray{name: String, indices: Vec<TypedExpr>},
+    ScalarAssign(String, Box<TypedExpr>),
     NumberF64(f64),
     String(String),
     Concatenation(Vec<TypedExpr>),
@@ -100,7 +99,7 @@ pub enum Expr {
     Call,
     Ternary(Box<TypedExpr>, Box<TypedExpr>, Box<TypedExpr>),
     Regex(String),
-    Index { name: String, indices: Vec<TypedExpr> },
+    ArrayIndex { name: String, indices: Vec<TypedExpr> },
     InArray { name: String, indices: Vec<TypedExpr>}
 }
 
@@ -117,7 +116,7 @@ impl Display for TypedExpr {
 impl Display for Expr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Expr::Assign(var, expr) => write!(f, "{} = {}", var, expr),
+            Expr::ScalarAssign(var, expr) => write!(f, "{} = {}", var, expr),
             Expr::Call => write!(f, "check_if_there_is_another_line"),
             Expr::Variable(n) => write!(f, "{}", n),
             Expr::String(str) => write!(f, "\"{}\"", str),
@@ -137,7 +136,7 @@ impl Display for Expr {
             }
             Expr::Regex(str) => write!(f, "\"{}\"", str),
 
-            Expr::Index { name, indices } => {
+            Expr::ArrayIndex { name, indices } => {
                 write!(f, "{}[", name)?;
                 for idx in indices {
                     write!(f, "{},", idx)?;
