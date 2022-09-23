@@ -189,7 +189,7 @@ impl Parser {
             ])
         } else if self.peek_next().ttype() == TokenType::Eq {
             let str = if let Token::Ident(str) =
-                self.consume(TokenType::Ident, "Expected identifier before '='")
+            self.consume(TokenType::Ident, "Expected identifier before '='")
             {
                 str
             } else {
@@ -260,26 +260,40 @@ impl Parser {
         self.assignment().into()
     }
 
+    // fn helper_array_assignment(&mut self, var: String) -> TypedExpr {
+    //     let mut exprs = vec![self.expression()];
+    //     while self.matches(vec![TokenType::Comma]) && self.peek().ttype() != TokenType::RightBracket {
+    //         exprs.push(self.expression());
+    //     }
+    //     self.consume(TokenType::RightBracket, "Assigning to an array index must end with a right bracket.");
+    //     self.consume(TokenType::Eq, "Array assignment must be followed by an equal sign");
+    //     let rhs = self.expression();
+    // }
+
     fn assignment(&mut self) -> TypedExpr {
         let lhs = self.ternary();
         if let Expr::Variable(var) = &lhs.expr {
             let var = var.clone();
-            if self.matches(vec![TokenType::Eq]) {
-                return TypedExpr::new(Expr::Assign(var, Box::new(self.assignment())));
-            } else if self.matches(vec![TokenType::InplaceAssign]) {
-                if let Token::InplaceEq(math_op) = self.previous().unwrap() {
-                    let expr = Expr::MathOp(
-                        Box::new(TypedExpr::new(Expr::Variable(var.to_string()))),
-                        math_op,
-                        Box::new(self.assignment()),
-                    );
-                    return TypedExpr::new(Expr::Assign(
-                        var.to_string(),
-                        Box::new(TypedExpr::new(expr)),
-                    ));
-                } else {
-                    panic!("not possible")
-                }
+            //
+            // if self.peek().ttype() == TokenType::LeftBracket {
+            //     let mut idx = self.current;
+            //     while self.peek_at(idx) != Token::RightBracket { idx += 1; }
+            //     if self.peek_at(idx) == Token::RightParen && self.peek_at(idx + 1) == Token::Eq {
+            //         return self.helper_array_assignment(var);
+            //     }
+            // } else if self.matches(vec![TokenType::Eq]) {
+            //     return TypedExpr::new(Expr::Assign(var, Box::new(self.assignment())));
+            // } else
+            if self.matches(vec![TokenType::InplaceAssign]) {
+                let math_op = if let Token::InplaceEq(math_op) = self.previous().unwrap() { math_op } else { unreachable!() };
+                let expr = Expr::MathOp(
+                    Box::new(Expr::Variable(var.to_string()).into()),
+                    math_op,
+                    Box::new(self.assignment()),
+                );
+                return Expr::Assign(
+                    var.to_string(),
+                    Box::new(expr.into())).into();
             }
         }
         lhs
@@ -289,10 +303,7 @@ impl Parser {
         let mut cond = self.logical_or();
         while self.matches(vec![TokenType::Question]) {
             let expr1 = self.ternary();
-            self.consume(
-                TokenType::Colon,
-                "Expected a colon after question mark in a ternary!",
-            );
+            self.consume(TokenType::Colon, "Expected a colon after question mark in a ternary!");
             let expr2 = self.ternary();
             return TypedExpr::new(Expr::Ternary(
                 Box::new(cond),
@@ -316,33 +327,70 @@ impl Parser {
     }
 
     fn logical_and(&mut self) -> TypedExpr {
-        let mut expr = self.regex();
+        let mut expr = self.array_membership();
         while self.matches(vec![TokenType::And]) {
             expr = TypedExpr::new(Expr::LogicalOp(
                 Box::new(expr),
                 LogicalOp::And,
-                Box::new(self.regex()),
-            ))
-        }
-        expr
-    }
-
-    fn regex(&mut self) -> TypedExpr {
-        // "a ~ /match/"
-        let mut expr = self.array_membership();
-        while self.matches(vec![TokenType::MatchedBy, TokenType::NotMatchedBy]) {
-            expr = TypedExpr::new(Expr::BinOp(
-                Box::new(expr),
-                if self.previous().unwrap().ttype() == TokenType::MatchedBy {BinOp::MatchedBy} else {BinOp::NotMatchedBy},
                 Box::new(self.array_membership()),
-            ));
+            ))
         }
         expr
     }
 
     fn array_membership(&mut self) -> TypedExpr {
         // <expr> in array_name
+        let mut expr = self.multi_dim_array_membership();
+        while self.matches(vec![TokenType::In]) {
+            let name = if let Token::Ident(name) = self.consume(TokenType::Ident, "An array name must follow `<expr> in`") { name } else { unreachable!() };
+            expr = Expr::InArray { name, indices: vec![expr] }.into()
+        }
+        expr
+    }
+
+    fn helper_multi_dim_array(&mut self) -> TypedExpr {
+        self.consume(TokenType::LeftParen, "Multidimensional array must begin with left paren");
+        let mut exprs = vec![self.regex()];
+        while self.matches(vec![TokenType::Comma]) {
+            if self.peek().ttype() == TokenType::RightParen { break; }
+            exprs.push(self.regex());
+        }
+        self.consume(TokenType::RightParen, "Multidimensional array indices must end with right paren");
+        self.consume(TokenType::In, "Multidimensional array access must be followed by an 'in'");
+        let ident = self.consume(TokenType::Ident, "Multidimensional array access must be followed by an array name. Eg: (1,2,3) in ARRAY_NAME");
+        let ident = if let Token::Ident(ident) = ident { ident } else { unreachable!("compiler bug consumed ident but got something else") };
+
+        let mut expr = TypedExpr::new(Expr::InArray { name: ident, indices: exprs });
+        while self.matches(vec![TokenType::In]) {
+            let ident = self.consume(TokenType::Ident, "Multidimensional array access must be followed by an array name. Eg: (1,2,3) in ARRAY_NAME");
+            let ident = if let Token::Ident(ident) = ident { ident } else { unreachable!("compiler bug consumed ident but got something else") };
+            expr = Expr::InArray { name: ident, indices: vec![expr.into()] }.into();
+        }
+        expr
+    }
+    fn multi_dim_array_membership(&mut self) -> TypedExpr {
+        let mut idx = self.current;
+
+        // Check if we match the regex \(.+\) in if so call the helper
+        if self.peek_at(idx) == Token::LeftParen {
+            while self.peek_at(idx) != Token::RightParen { idx += 1; }
+            if self.peek_at(idx) == Token::RightParen && self.peek_at(idx + 1) == Token::In {
+                return self.helper_multi_dim_array();
+            }
+        }
+        self.regex()
+    }
+
+
+    fn regex(&mut self) -> TypedExpr {
+        // "a ~ /match/"
         let mut expr = self.compare();
+        while self.matches(vec![TokenType::MatchedBy, TokenType::NotMatchedBy]) {
+            expr = Expr::BinOp(
+                Box::new(expr),
+                if self.previous().unwrap().ttype() == TokenType::MatchedBy { BinOp::MatchedBy } else { BinOp::NotMatchedBy },
+                Box::new(self.compare())).into();
+        }
         expr
     }
 
@@ -363,7 +411,7 @@ impl Parser {
                 Token::BinOp(BinOp::GreaterEq) => BinOp::GreaterEq,
                 Token::BinOp(BinOp::BangEq) => BinOp::BangEq,
                 Token::BinOp(BinOp::EqEq) => BinOp::EqEq,
-                _ => panic!("Parser bug in compare matches function"),
+                _ => unreachable!("Parser bug in compare matches function"),
             };
             expr = Expr::BinOp(Box::new(expr), op, Box::new(self.string_concat())).into()
         }
@@ -391,6 +439,10 @@ impl Parser {
             TokenType::Colon,
             TokenType::MatchedBy,
             TokenType::NotMatchedBy,
+            TokenType::Comma,
+            TokenType::In,
+            TokenType::LeftBracket,
+            TokenType::RightBracket,
         ];
         while !self.is_at_end() && !not_these.contains(&self.peek().ttype()) {
             if let Expr::Concatenation(vals) = &mut expr.expr {
@@ -408,7 +460,7 @@ impl Parser {
             let op = match self.previous().unwrap() {
                 Token::MathOp(MathOp::Minus) => MathOp::Minus,
                 Token::MathOp(MathOp::Plus) => MathOp::Plus,
-                _ => panic!("Parser bug in comparison function"),
+                _ => unreachable!("Parser bug in comparison function"),
             };
             expr = Expr::MathOp(Box::new(expr), op, Box::new(self.plus_minus())).into();
         }
@@ -422,7 +474,7 @@ impl Parser {
                 Token::MathOp(MathOp::Star) => MathOp::Star,
                 Token::MathOp(MathOp::Slash) => MathOp::Slash,
                 Token::MathOp(MathOp::Modulus) => MathOp::Modulus,
-                _ => panic!("Parser bug in comparison function"),
+                _ => unreachable!("Parser bug in comparison function"),
             };
             expr = Expr::MathOp(Box::new(expr), op, Box::new(self.unary())).into()
         }
@@ -433,7 +485,7 @@ impl Parser {
         if !(self.peek().ttype() == TokenType::Minus
             && self.peek_next().ttype() == TokenType::Minus)
             && !(self.peek().ttype() == TokenType::Plus
-                && self.peek_next().ttype() == TokenType::Plus)
+            && self.peek_next().ttype() == TokenType::Plus)
             && self.matches(vec![TokenType::Minus, TokenType::Plus, TokenType::Bang])
         {
             let p = self.previous().unwrap().ttype();
@@ -444,9 +496,9 @@ impl Parser {
                 TokenType::Bang => Expr::BinOp(Box::new(one), BinOp::BangEq, Box::new(rhs)),
                 TokenType::Plus => Expr::MathOp(Box::new(zero), MathOp::Plus, Box::new(rhs)),
                 TokenType::Minus => Expr::MathOp(Box::new(zero), MathOp::Minus, Box::new(rhs)),
-                _ => panic!("compiled bug"),
+                _ => unreachable!(),
             }
-            .into();
+                .into();
         }
         self.exp()
     }
@@ -476,7 +528,7 @@ impl Parser {
                     MathOp::Plus,
                     Box::new(Expr::NumberF64(1.0).into()),
                 )
-                .into();
+                    .into();
 
                 return Expr::Assign(name, Box::new(increment)).into();
             }
@@ -495,7 +547,7 @@ impl Parser {
                     MathOp::Minus,
                     Box::new(Expr::NumberF64(1.0).into()),
                 )
-                .into();
+                    .into();
 
                 return Expr::Assign(name, Box::new(decrement)).into();
             }
@@ -517,14 +569,14 @@ impl Parser {
                     MathOp::Plus,
                     Box::new(Expr::NumberF64(1.0).into()),
                 )
-                .into();
+                    .into();
                 let assign = Expr::Assign(name, Box::new(increment)).into();
                 expr = Expr::MathOp(
                     Box::new(assign),
                     MathOp::Minus,
                     Box::new(Expr::NumberF64(1.0).into()),
                 )
-                .into();
+                    .into();
             } else if self.peek().ttype() == TokenType::Minus
                 && self.peek_next().ttype() == TokenType::Minus
             {
@@ -535,14 +587,14 @@ impl Parser {
                     MathOp::Minus,
                     Box::new(Expr::NumberF64(1.0).into()),
                 )
-                .into();
+                    .into();
                 let assign = Expr::Assign(name, Box::new(decrement)).into();
                 expr = Expr::MathOp(
                     Box::new(assign),
                     MathOp::Plus,
                     Box::new(Expr::NumberF64(1.0).into()),
                 )
-                .into();
+                    .into();
             }
         }
         expr
@@ -664,7 +716,7 @@ fn test_ast_number() {
                 bnum!(1.0),
                 MathOp::Plus,
                 bnum!(2.0)
-            )))]
+            )))],
         )
     );
 }
@@ -720,7 +772,7 @@ fn test_mathop_exponent() {
                 bnum!(2.0),
                 MathOp::Exponent,
                 bnum!(2.0)
-            )))]
+            )))],
         )
     );
 }
@@ -819,7 +871,7 @@ fn test_if_else() {
         Program::new_action_only(Stmt::If(
             num!(1.0),
             Box::new(Stmt::Print(num!(2.0))),
-            Some(Box::new(Stmt::Print(num!(3.0))))
+            Some(Box::new(Stmt::Print(num!(3.0)))),
         ))
     );
 }
@@ -852,7 +904,7 @@ fn test_group() {
         parse(lex(str).unwrap()),
         Program::new_action_only(Stmt::Group(vec![
             Stmt::Print(num!(1.0)),
-            Stmt::Print(num!(2.0))
+            Stmt::Print(num!(2.0)),
         ]))
     );
 }
@@ -868,9 +920,9 @@ fn test_if_else_continues() {
             Stmt::If(
                 num!(1.0),
                 Box::new(Stmt::Print(num!(2.0))),
-                Some(Box::new(Stmt::Print(num!(3.0))))
+                Some(Box::new(Stmt::Print(num!(3.0)))),
             ),
-            Stmt::Expr(num!(4.0))
+            Stmt::Expr(num!(4.0)),
         ]))
     );
 }
@@ -902,7 +954,7 @@ fn test_pattern_only() {
             vec![],
             vec![PatternAction::new_pattern_only(texpr!(Expr::Variable(
                 "test".to_string()
-            )))]
+            )))],
         )
     );
 }
@@ -917,7 +969,7 @@ fn test_print_no_semicolon() {
         Program::new(
             vec![],
             vec![],
-            vec![PatternAction::new_action_only(Stmt::Print(num!(1.0)))]
+            vec![PatternAction::new_action_only(Stmt::Print(num!(1.0)))],
         )
     );
 }
@@ -1156,5 +1208,33 @@ fn string_concat_two_cols() {
     let concat = texpr!(Expr::Concatenation(vec![one, two]));
     let print = Stmt::Print(concat);
     println!("{}", actual.pattern_actions[0].action);
+    assert_eq!(actual, sprogram!(print));
+}
+
+
+#[test]
+fn array_membership() {
+    actual!(actual, "{ 1 in a } ");
+    let expr = texpr!(Expr::InArray{name: "a".to_string(),  indices: vec![num!(1.0)]});
+    let print = Stmt::Expr(expr);
+    assert_eq!(actual, sprogram!(print));
+}
+
+#[test]
+fn multi_dim_array_membership() {
+    actual!(actual, "{ (1,2,3) in a } ");
+    let expr = texpr!(Expr::InArray{name: "a".to_string(),  indices: vec![num!(1.0),num!(2.0),num!(3.0)]});
+    let print = Stmt::Expr(expr);
+    assert_eq!(actual, sprogram!(print));
+}
+
+#[test]
+fn multi_multi_dim_array_membership() {
+    actual!(actual, "{ (1,2,3) in a in b} ");
+    let expr = texpr!(
+        Expr::InArray{name: "b".to_string(),
+            indices: vec![
+                Expr::InArray{name: "a".to_string(),  indices: vec![num!(1.0),num!(2.0),num!(3.0)]}.into()]});
+    let print = Stmt::Expr(expr);
     assert_eq!(actual, sprogram!(print));
 }
