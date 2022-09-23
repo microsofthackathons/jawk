@@ -119,7 +119,7 @@ impl TypeAnalysis {
                 self.analyze_expr(right)?;
                 expr.typ = ScalarType::Float;
             }
-            Expr::Assign(var, value) => {
+            Expr::ScalarAssign(var, value) => {
                 self.analyze_expr(value)?;
                 self.use_as_scalar(var, value.typ)?;
                 expr.typ = value.typ;
@@ -160,7 +160,7 @@ impl TypeAnalysis {
                     self.analyze_expr(val)?;
                 }
             }
-            Expr::Index { .. } => {todo!("array typing")}
+            Expr::ArrayIndex { .. } => {todo!("array typing")}
             Expr::InArray { .. } => {todo!("array typing")}
         };
         Ok(())

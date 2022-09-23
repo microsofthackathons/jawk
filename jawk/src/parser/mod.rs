@@ -196,7 +196,7 @@ impl Parser {
                 panic!("Expected identifier before '='")
             };
             self.consume(TokenType::Eq, "Expected '=' after identifier");
-            Stmt::Expr(TypedExpr::new(Expr::Assign(
+            Stmt::Expr(TypedExpr::new(Expr::ScalarAssign(
                 str,
                 Box::new(self.expression()),
             )))
@@ -260,38 +260,22 @@ impl Parser {
         self.assignment().into()
     }
 
-    // fn helper_array_assignment(&mut self, var: String) -> TypedExpr {
-    //     let mut exprs = vec![self.expression()];
-    //     while self.matches(vec![TokenType::Comma]) && self.peek().ttype() != TokenType::RightBracket {
-    //         exprs.push(self.expression());
-    //     }
-    //     self.consume(TokenType::RightBracket, "Assigning to an array index must end with a right bracket.");
-    //     self.consume(TokenType::Eq, "Array assignment must be followed by an equal sign");
-    //     let rhs = self.expression();
-    // }
-
     fn assignment(&mut self) -> TypedExpr {
         let lhs = self.ternary();
         if let Expr::Variable(var) = &lhs.expr {
             let var = var.clone();
-            //
-            // if self.peek().ttype() == TokenType::LeftBracket {
-            //     let mut idx = self.current;
-            //     while self.peek_at(idx) != Token::RightBracket { idx += 1; }
-            //     if self.peek_at(idx) == Token::RightParen && self.peek_at(idx + 1) == Token::Eq {
-            //         return self.helper_array_assignment(var);
-            //     }
-            // } else if self.matches(vec![TokenType::Eq]) {
-            //     return TypedExpr::new(Expr::Assign(var, Box::new(self.assignment())));
-            // } else
-            if self.matches(vec![TokenType::InplaceAssign]) {
+            if self.matches(vec![TokenType::Eq]) {
+                // =
+                return TypedExpr::new(Expr::ScalarAssign(var, Box::new(self.assignment())));
+            } else if self.matches(vec![TokenType::InplaceAssign]) {
+                // ?=
                 let math_op = if let Token::InplaceEq(math_op) = self.previous().unwrap() { math_op } else { unreachable!() };
                 let expr = Expr::MathOp(
                     Box::new(Expr::Variable(var.to_string()).into()),
                     math_op,
                     Box::new(self.assignment()),
                 );
-                return Expr::Assign(
+                return Expr::ScalarAssign(
                     var.to_string(),
                     Box::new(expr.into())).into();
             }
@@ -368,6 +352,7 @@ impl Parser {
         }
         expr
     }
+
     fn multi_dim_array_membership(&mut self) -> TypedExpr {
         let mut idx = self.current;
 
@@ -380,7 +365,6 @@ impl Parser {
         }
         self.regex()
     }
-
 
     fn regex(&mut self) -> TypedExpr {
         // "a ~ /match/"
@@ -466,7 +450,7 @@ impl Parser {
         }
         expr
     }
-    //1 * 3
+
     fn term(&mut self) -> TypedExpr {
         let mut expr = self.unary();
         while self.matches(vec![TokenType::Star, TokenType::Slash, TokenType::Modulo]) {
@@ -530,7 +514,7 @@ impl Parser {
                 )
                     .into();
 
-                return Expr::Assign(name, Box::new(increment)).into();
+                return Expr::ScalarAssign(name, Box::new(increment)).into();
             }
         } else if self.peek().ttype() == TokenType::Minus
             && self.peek_next().ttype() == TokenType::Minus
@@ -541,15 +525,15 @@ impl Parser {
             self.advance();
 
             if let Token::Ident(name) = self.previous().unwrap() {
-                let varExpr = Expr::Variable(name.clone()).into();
+                let var = Expr::Variable(name.clone()).into();
                 let decrement = Expr::MathOp(
-                    Box::new(varExpr),
+                    Box::new(var),
                     MathOp::Minus,
                     Box::new(Expr::NumberF64(1.0).into()),
                 )
                     .into();
 
-                return Expr::Assign(name, Box::new(decrement)).into();
+                return Expr::ScalarAssign(name, Box::new(decrement)).into();
             }
         }
 
@@ -570,7 +554,7 @@ impl Parser {
                     Box::new(Expr::NumberF64(1.0).into()),
                 )
                     .into();
-                let assign = Expr::Assign(name, Box::new(increment)).into();
+                let assign = Expr::ScalarAssign(name, Box::new(increment)).into();
                 expr = Expr::MathOp(
                     Box::new(assign),
                     MathOp::Minus,
@@ -588,7 +572,7 @@ impl Parser {
                     Box::new(Expr::NumberF64(1.0).into()),
                 )
                     .into();
-                let assign = Expr::Assign(name, Box::new(decrement)).into();
+                let assign = Expr::ScalarAssign(name, Box::new(decrement)).into();
                 expr = Expr::MathOp(
                     Box::new(assign),
                     MathOp::Plus,
@@ -616,7 +600,7 @@ impl Parser {
 
     fn primary(&mut self) -> TypedExpr {
         if self.is_at_end() {
-            panic!("Primary and at end")
+            panic!("Unexpected end of input")
         }
         match self.tokens.get(self.current).unwrap().clone() {
             Token::NumberF64(num) => {
@@ -631,7 +615,11 @@ impl Parser {
             }
             Token::Ident(name) => {
                 self.consume(TokenType::Ident, "Expected to parse an ident here");
-                Expr::Variable(name).into()
+                if self.matches(vec![TokenType::LeftBracket]) {
+                    self.helper_array_assignment(name)
+                } else {
+                    Expr::Variable(name).into()
+                }
             }
             Token::String(string) => {
                 self.consume(TokenType::String, "Expected to parse a string here");
@@ -643,6 +631,15 @@ impl Parser {
             }
             t => panic!("Unexpected token {:?} {}", t, TokenType::name(t.ttype())),
         }
+    }
+
+    fn helper_array_assignment(&mut self, name: String) -> TypedExpr {
+        let mut indices = vec![self.expression()];
+        while self.matches(vec![TokenType::Comma]) && self.peek().ttype() != TokenType::RightBracket {
+            indices.push(self.expression());
+        }
+        self.consume(TokenType::RightBracket, "Array indexing must end with a right bracket.");
+        Expr::ArrayIndex { name, indices }.into()
     }
 }
 
@@ -752,7 +749,7 @@ fn test_ast_oop_2() {
 #[test]
 fn test_ast_assign() {
     use crate::lexer::lex;
-    let stmt = Stmt::Expr(texpr!(Expr::Assign(format!("abc"), bnum!(2.0))));
+    let stmt = Stmt::Expr(texpr!(Expr::ScalarAssign(format!("abc"), bnum!(2.0))));
     assert_eq!(
         parse(lex("{abc = 2.0; }").unwrap()),
         Program::new_action_only(stmt)
@@ -1086,7 +1083,7 @@ fn test_cmp_oop2() {
 
     let left = texpr!(Expr::MathOp(bnum!(1.0), MathOp::Star, bnum!(3.0)));
     let body = btexpr!(Expr::BinOp(Box::new(left), BinOp::EqEq, bnum!(4.0)));
-    let stmt = Stmt::Expr(texpr!(Expr::Assign(format!("a"), body)));
+    let stmt = Stmt::Expr(texpr!(Expr::ScalarAssign(format!("a"), body)));
     assert_eq!(actual, sprogram!(stmt));
 }
 
@@ -1094,13 +1091,13 @@ fn test_cmp_oop2() {
 fn test_for_loop() {
     actual!(actual, "{ for (a = 0; a < 1000; a = a + 1) { print a; } }");
     let a = format!("a");
-    let init = texpr!(Expr::Assign(a.clone(), btexpr!(Expr::NumberF64(0.0))));
+    let init = texpr!(Expr::ScalarAssign(a.clone(), btexpr!(Expr::NumberF64(0.0))));
     let test = texpr!(Expr::BinOp(
         btexpr!(Expr::Variable(a.clone())),
         BinOp::Less,
         bnum!(1000.0)
     ));
-    let incr = texpr!(Expr::Assign(
+    let incr = texpr!(Expr::ScalarAssign(
         a.clone(),
         btexpr!(Expr::MathOp(
             btexpr!(Expr::Variable(a.clone())),
@@ -1238,3 +1235,49 @@ fn multi_multi_dim_array_membership() {
     let print = Stmt::Expr(expr);
     assert_eq!(actual, sprogram!(print));
 }
+
+#[test]
+fn array_access() {
+    actual!(actual, "{ a[0] }");
+    let expr = texpr!(Expr::ArrayIndex{name: "a".to_string(),indices: vec![Expr::NumberF64(0.0).into()]});
+    let stmt = Stmt::Expr(expr);
+    assert_eq!(actual, sprogram!(stmt));
+}
+
+
+
+#[test]
+fn array_access_multi() {
+    actual!(actual, "{ a[0,1,2,3] }");
+    let expr = texpr!(Expr::ArrayIndex{name: "a".to_string(),indices: vec![num!(0.0), num!(1.0),num!(2.0),num!(3.0)]});
+    let stmt = Stmt::Expr(expr);
+    assert_eq!(actual, sprogram!(stmt));
+}
+
+#[test]
+fn array_access_multi_expr() {
+    actual!(actual, "{ a[0+1] }");
+    let zero = bnum!(0.0);
+    let one = bnum!(1.0);
+    let op = Expr::MathOp(zero, MathOp::Plus, one).into();
+    let expr = texpr!(Expr::ArrayIndex{name: "a".to_string(),indices: vec![op]});
+    let stmt = Stmt::Expr(expr);
+    assert_eq!(actual, sprogram!(stmt));
+}
+
+#[test]
+fn array_access_nested() {
+    actual!(actual, "{ a[a[0]] }");
+    let expr = texpr!(Expr::ArrayIndex{name: "a".to_string(),indices: vec![Expr::NumberF64(0.0).into()]});
+    let outer = texpr!(Expr::ArrayIndex {name: "a".to_string(), indices: vec![expr]});
+    assert_eq!(actual, sprogram!(Stmt::Expr(outer)));
+}
+
+#[test]
+fn array_access_assign() {
+    actual!(actual, "{ a[0] = 1 }");
+    let expr = texpr!(Expr::ArrayIndex{name: "a".to_string(),indices: vec![Expr::NumberF64(0.0).into()]});
+    let outer = texpr!(Expr::ArrayIndex {name: "a".to_string(), indices: vec![expr]});
+    assert_eq!(actual, sprogram!(Stmt::Expr(outer)));
+}
+

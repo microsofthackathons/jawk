@@ -214,7 +214,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
     // When compile_expr returns a string the caller is responsible for freeing it
     fn compile_expr(&mut self, expr: &TypedExpr) -> Result<ValueT, PrintableError> {
         Ok(match &expr.expr {
-            Expr::Assign(var, value) => {
+            Expr::ScalarAssign(var, value) => {
                 // BEGIN: Optimization
                 // Optimization to allow reusing the string being assigned to by a string concat operation
                 // a = "init"
@@ -455,7 +455,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
 
                 self.load(&self.binop_scratch.clone())
             }
-            Expr::Index { .. } => { todo!("array exprs") }
+            Expr::ArrayIndex { .. } => { todo!("array exprs") }
             Expr::InArray { .. } => { todo!("array exprs") }
         })
     }
