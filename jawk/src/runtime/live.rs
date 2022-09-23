@@ -103,7 +103,6 @@ extern "C" fn binop(
         BinOp::BangEq => left != right,
         BinOp::EqEq => left == right,
         BinOp::MatchedBy => {
-<<<<<<< HEAD
             let reg = match data.regex_cache.get_mut(&*right) {
                 Some(cachedRegex) => cachedRegex,
                 None => {
@@ -125,15 +124,6 @@ extern "C" fn binop(
             };
             !reg.matches(&left)
         },
-=======
-            let RE = Regex::new(&right).unwrap();
-            RE.is_match(&left)
-        }
-        BinOp::NotMatchedBy => {
-            let RE = Regex::new(&right).unwrap();
-            !RE.is_match(&left)
-        }
->>>>>>> 4f57f0d (helper)
     };
     let res = if res { 1.0 } else { 0.0 };
     Rc::into_raw(left);
@@ -225,10 +215,7 @@ pub struct RuntimeData {
     columns: Columns,
     buffer: String,
     stdout: BufWriter<StdoutLock<'static>>,
-<<<<<<< HEAD
     regex_cache: LruCache<String, Regex>
-=======
->>>>>>> 4f57f0d (helper)
 }
 
 impl RuntimeData {
