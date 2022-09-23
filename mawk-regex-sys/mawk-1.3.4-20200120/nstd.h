@@ -43,7 +43,7 @@ the GNU General Public License, version 2, 1991.
 #ifndef  NSTD_H
 #define  NSTD_H		1
 
-#include <config.h>
+//#include <config.h>
 
 /* types */
 
@@ -52,11 +52,7 @@ typedef void *PTR;
 #ifdef   SIZE_T_STDDEF_H
 #include <stddef.h>
 #else
-#ifdef   SIZE_T_TYPES_H
 #include <sys/types.h>
-#else
-typedef unsigned size_t;
-#endif
 #endif
 
 #include <stdlib.h>
