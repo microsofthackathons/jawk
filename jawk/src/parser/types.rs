@@ -88,6 +88,7 @@ impl Into<TypedExpr> for Expr {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Expr {
     Assign(String, Box<TypedExpr>),
+    AssignToArray{name: String, indices: Vec<TypedExpr>},
     NumberF64(f64),
     String(String),
     Concatenation(Vec<TypedExpr>),
