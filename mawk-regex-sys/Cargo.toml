@@ -1,0 +1,16 @@
+[package]
+name = "mawk-regex-sys"
+version = "0.0.0"
+build = "build.rs"
+edition = "2018"
+description = "Rust bindings for mawk"
+license = " GPL-2.0-only"
+homepage = "https://github.com/n8ta/jawk"
+repository = "https://github.com/n8ta/jawk"
+
+[dependencies]
+libc = "0.2"
+
+[build-dependencies]
+cc = { version = "1.0", features = ["parallel"] }
+pkg-config = "0.3"
