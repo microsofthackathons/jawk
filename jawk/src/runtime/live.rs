@@ -8,6 +8,7 @@ use std::fmt::{Write as FmtWrite};
 use std::io::{BufWriter, StdoutLock, Write};
 use std::rc::Rc;
 use regex::Regex;
+use std::collections::HashMap;
 
 // Live runtime used by most programs.
 // A pointer to the runtime data is provided for all calls but only used for some.
@@ -101,12 +102,30 @@ extern "C" fn binop(
         BinOp::BangEq => left != right,
         BinOp::EqEq => left == right,
         BinOp::MatchedBy => {
-            let RE = Regex::new(&right).unwrap();
-            RE.is_match(&left)
+            let data = cast_to_runtime_data(_dat);
+            match data.regexCache.get(&right as &str) {
+                Some(cachedRegex) => {
+                    cachedRegex.is_match(&left)
+                } ,
+                None => {
+                    let RE = Regex::new(&right).unwrap();
+                    data.regexCache.insert((&right).to_string(), RE.clone());
+                    RE.is_match(&left)
+                }
+            }
         },
         BinOp::NotMatchedBy => {
-            let RE = Regex::new(&right).unwrap();
-            !RE.is_match(&left)
+            let data = cast_to_runtime_data(_dat);
+            match data.regexCache.get(&right as &str) {
+                Some(cachedRegex) => {
+                    !cachedRegex.is_match(&left)
+                } ,
+                None => {
+                    let RE = Regex::new(&right).unwrap();
+                    data.regexCache.insert((&right).to_string(), RE.clone());
+                    !RE.is_match(&left)
+                }
+            }
         },
     };
     let res = if res { 1.0 } else { 0.0 };
@@ -194,7 +213,8 @@ impl Drop for LiveRuntime {
 pub struct RuntimeData {
     columns: Columns,
     buffer: String,
-    stdout: BufWriter<StdoutLock<'static>>
+    stdout: BufWriter<StdoutLock<'static>>,
+    regexCache: HashMap<String, Regex>
 }
 
 impl RuntimeData {
@@ -203,6 +223,7 @@ impl RuntimeData {
             buffer: String::with_capacity(1000),
             columns: Columns::new(files),
             stdout: BufWriter::new(std::io::stdout().lock()),
+            regexCache: HashMap::new()
         }
     }
 }
