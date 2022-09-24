@@ -112,6 +112,9 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
             let val = ValueT::new(tag, float_value, ptr);
             self.scopes.insert_scalar(space_in_front, val)?;
         }
+
+        self.runtime.allocate_arrays(extractor_results.arrays.len());
+        self.array_map = extractor_results.arrays;
         Ok(extractor_results.vars)
     }
 
@@ -255,6 +258,24 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
             }
         }
         ValueT::new(self.string_tag(), self.zero_f(), result)
+    }
+
+    // Concat indices all values MUST be strings
+    pub fn concat_indices(&mut self, compiled: &Vec<Value>) -> Value {
+        if compiled.len() == 1 {
+            return compiled[0].clone();
+        }
+        let mut result = self.runtime.concat_array_indices(
+            &mut self.function,
+            compiled.get(0).unwrap().clone(),
+            compiled.get(1).unwrap().clone(),
+        );
+        if compiled.len() >= 3 {
+            for var in &compiled[2..] {
+                result = self.runtime.concat(&mut self.function, result, var.clone());
+            }
+        }
+        result
     }
 
     pub fn load(&mut self, ptr: &ValuePtrT) -> ValueT {

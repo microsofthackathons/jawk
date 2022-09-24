@@ -1299,3 +1299,14 @@ fn array_access_assign_multi_dim() {
     assert_eq!(actual, sprogram!(Stmt::Expr(expr)));
 }
 
+#[test]
+fn array_assign_multi_expr() {
+    actual!(actual, "{ a[0+1, a[0]] }");
+    let zero = bnum!(0.0);
+    let one = bnum!(1.0);
+    let op = Expr::MathOp(zero, MathOp::Plus, one).into();
+    let a_zero = Expr::ArrayIndex {name: "a".to_string(), indices: vec![num!(0.0)]}.into();
+    let expr = texpr!(Expr::ArrayIndex{name: "a".to_string(),indices: vec![op, a_zero]});
+    let stmt = Stmt::Expr(expr);
+    assert_eq!(actual, sprogram!(stmt));
+}

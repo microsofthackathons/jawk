@@ -17,7 +17,7 @@ use crate::printable_error::PrintableError;
 use crate::runtime::{LiveRuntime, Runtime, TestRuntime};
 use crate::Expr;
 use gnu_libjit::{Abi, Context, Function, Label, Value};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::os::raw::{c_char, c_long, c_void};
 use std::rc::Rc;
 
@@ -31,9 +31,9 @@ use std::rc::Rc;
 /// }
 
 
-pub const FLOAT_TAG: u8 = 0;
-pub const STRING_TAG: u8 = 1;
-pub const ARRAY_TAG: u8 = 1;
+pub const FLOAT_TAG: i8 = 0;
+pub const STRING_TAG: i8 = 1;
+pub const ARRAY_TAG: i8 = 1;
 
 // Entry point to run a program
 pub fn compile_and_run(prog: Stmt, files: &[String]) -> Result<(), PrintableError> {
@@ -62,13 +62,18 @@ struct CodeGen<'a, RuntimeT: Runtime> {
     // The jit context
     runtime: &'a mut RuntimeT, // Runtime provides native functions and may be used for debugging.
 
+    array_map: HashMap<String, i32>, // Map each array name to its unique identifier
+
     // Used for commonly reused snippets like string-truthyness etc.
     subroutines: Subroutines,
 
-    // These are effectively stack variables that we use as scratch space.
+    // These are local variables that we use as scratch space.
     binop_scratch: ValuePtrT,
-    // complete value
-    binop_scratch_int: Value, // just an int (generally 0 or 1 used for insn_eq ne comparisons)
+    // just an int (generally 0 or 1 used for insn_eq ne comparisons) stored as a local.
+    binop_scratch_int: Value,
+
+    // Stack space to use for passing multiple return values from the runtime.
+    ptr_scratch: ValuePtrT,
 
     // Used to init the pointer section of the value struct when it's undefined. Should never be dereferenced.
     zero_ptr: Value,
@@ -93,6 +98,13 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
         let float_tag = function.create_sbyte_constant(FLOAT_TAG as c_char);
         let string_tag = function.create_sbyte_constant(STRING_TAG as c_char);
 
+        // Leak some memory to use as scratch space for passing values between the jit and the runtime.
+        let tag_scratch = function.create_void_ptr_constant((Box::leak(Box::new(FLOAT_TAG)) as *mut i8) as *mut c_void);
+        let float_scratch = function.create_void_ptr_constant(Box::leak(Box::new(0.0 as f64)) as *mut f64 as *mut c_void);
+        let zero = Box::leak(Box::new(0)) as *mut i32;
+        let ptr_scratch = function.create_void_ptr_constant(Box::leak(Box::new(zero)) as (*mut (*mut i32)) as *mut c_void);
+        let ptr_scratch = ValuePtrT::new(tag_scratch, float_scratch, ptr_scratch);
+
         let binop_scratch_int = function.create_value_int();
         let binop_scratch = ValueT::new(
             function.create_value_int(),
@@ -101,12 +113,14 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
         );
         let subroutines = Subroutines::new(&mut context, runtime);
         let codegen = CodeGen {
+            array_map: HashMap::new(),
             function,
             scopes: Scopes::new(),
             context,
             runtime,
             subroutines,
             binop_scratch,
+            ptr_scratch,
             binop_scratch_int,
             zero_ptr,
             zero_f,
@@ -292,7 +306,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
 
                 // Optimize the case where we know both are floats
                 if left_expr.typ == ScalarType::Float && right_expr.typ == ScalarType::Float {
-                    return Ok(ValueT::new(tag, self.float_binop(&left.float, &right.float, *op), self.zero_ptr.clone(), ));
+                    return Ok(ValueT::new(tag, self.float_binop(&left.float, &right.float, *op), self.zero_ptr.clone()));
                 }
 
                 let left_is_float = self.function.insn_eq(&tag, &left.tag);
@@ -306,7 +320,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 // String/Float Float/String String/String case
                 let left_as_string = self.to_string(&left, left_expr.typ);
                 let right_as_string = self.to_string(&right, right_expr.typ);
-                let res = self.runtime.binop(&mut self.function, left_as_string.clone(), right_as_string.clone(), *op, );
+                let res = self.runtime.binop(&mut self.function, left_as_string.clone(), right_as_string.clone(), *op);
                 let result = ValueT::new(self.float_tag.clone(), res, self.zero_ptr.clone());
                 self.store(&self.binop_scratch.clone(), &result);
                 self.drop(&left_as_string);
@@ -455,14 +469,34 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
 
                 self.load(&self.binop_scratch.clone())
             }
-            Expr::ArrayIndex { .. } => {
-                todo!("array exprs")
+            Expr::ArrayIndex { name, indices } => {
+                let values = self.compile_exprs_to_string(indices)?;
+                let indices = self.concat_indices(&values);
+                let array_id = *self.array_map.get(name).unwrap();
+                // Runtime will set the out_tag out_float and out_ptr pointers to a new value. Just load em
+                self.runtime.array_access(&mut self.function, array_id, indices, self.ptr_scratch.tag.clone(), self.ptr_scratch.float.clone(), self.ptr_scratch.pointer.clone());
+                let tag = self.function.insn_load_relative(&self.ptr_scratch.tag, 0, &Context::int_type());
+                let float = self.function.insn_load_relative(&self.ptr_scratch.float, 0, &Context::float64_type());
+                let pointer = self.function.insn_load_relative(&self.ptr_scratch.pointer, 0, &Context::void_ptr_type());
+                ValueT::new(tag, float, pointer)
             }
-            Expr::InArray { .. } => {
-                todo!("array exprs")
+            Expr::InArray { name, indices } => {
+                let values = self.compile_exprs_to_string(indices)?;
+                let value = self.concat_indices(&values);
+                let array_id = *self.array_map.get(name).unwrap();
+                let float_result = self.runtime.in_array(&mut self.function, array_id, value);
+                ValueT::new(self.float_tag(), float_result, self.zero_ptr.clone())
             }
-            Expr::ArrayAssign { .. } => {
-                todo!("array assign")
+            Expr::ArrayAssign { name, indices, value } => {
+                let rhs = self.compile_expr(value)?;
+                let values = self.compile_exprs_to_string(indices)?;
+                let indices = self.concat_indices(&values);
+                let array_id = *self.array_map.get(name).unwrap();
+                let result_copy = self.copy_if_string(rhs.clone(), value.typ);
+                let float_result = self.runtime.array_assign(&mut self.function, array_id, indices,
+                                                             rhs.tag, rhs.float, rhs.pointer,
+                );
+                result_copy
             }
         })
     }

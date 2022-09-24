@@ -43,22 +43,15 @@ fn test_against(interpreter: &str, prog: &str, oracle_output: &str, file: &PathB
         Err(err) => return, // this interpreter doesn't exist
     }
     let mut ast = transform(parse(lex(prog).unwrap()));
-    analyze(&mut ast);
+    analyze(&mut ast).unwrap();
 
-    let files = vec![file.to_str().unwrap().to_string()];
-    let ours = compile_and_capture(ast, &files).unwrap().output();
     let output = test_once(interpreter, prog, file);
 
     assert_eq!(
-        ours,
         output.0,
-        "LEFT jawk, RIGHT {} stdout didnt match",
-        interpreter
-    );
-    assert_eq!(
-        ours,
         oracle_output,
-        "LEFT jawk, RIGHT expected-output, stdout didn't match"
+        "LEFT {} - RIGHT oracle didnt match",
+        interpreter
     );
 }
 
@@ -84,21 +77,20 @@ fn test_perf(interpreter: &str, prog: &str, file: &PathBuf) {
 fn test_it<S: AsRef<str>>(prog: &str, file: S, oracle_output: &str) {
     println!("Program:\n{}", prog);
     let mut ast = transform(parse(lex(&prog).unwrap()));
-    analyze(&mut ast);
-    println!("Ast:\n{}", ast);
+    analyze(&mut ast).unwrap();
+    println!("Ast:\n{}", &ast);
 
     let temp_dir = tempdir().unwrap();
     let file_path = temp_dir.path().join("tmp");
     std::fs::write(file_path.clone(), file.as_ref()).unwrap();
     let file_path_string = file_path.to_str().unwrap().to_string();
     let res = compile_and_capture(ast, &[file_path_string]).unwrap();
-    let string_in = res.strings_in();
-    let string_out = res.strings_out();
     assert_eq!(
-        string_in, string_out,
-        "runtime strings_in didn't match string_out. Possible mem leak {} vs {}",
-        string_in, string_out
+        res.strings_in(), res.strings_out(),
+        "runtime strings_in didn't match string_out. Possible mem leak `{}` in vs `{}` out",
+        res.strings_in(), res.strings_out()
     );
+    assert_eq!(res.output(), oracle_output, "LEFT jawk -- RIGHT oracle, did not match");
 
     test_against("awk", prog, oracle_output, &file_path);
     test_against("mawk", prog, oracle_output, &file_path);
@@ -866,4 +858,53 @@ test!(
     "BEGIN { print \"123\" !~ /1/}",
     ONE_LINE,
     "0\n"
+);
+
+test!(
+    test_array_get,
+    "BEGIN { print a[0] }",
+    ONE_LINE,
+    "\n"
+);
+
+test!(
+    test_array_set_get,
+    "BEGIN { a[0] = 5; print a[0]; a[1] = 2; print a[1]; a[1] = 3; print a[1]; }",
+    ONE_LINE,
+    "5\n2\n3\n"
+);
+
+test!(
+    test_array_get_multi,
+    "BEGIN { print a[0, 1] }",
+    ONE_LINE,
+    "\n"
+);
+
+test!(
+    test_array_set_get_multi,
+    "BEGIN { a[0,1] = 5; print a[0, 1] }",
+    ONE_LINE,
+    "5\n"
+);
+
+test!(
+    test_in_array_1,
+    "BEGIN { a[5] = 3; print 5 in a; }",
+    ONE_LINE,
+    "1\n"
+);
+
+test!(
+    test_in_array_2,
+    "BEGIN { a[5] = 3; print (5) in a; }",
+    ONE_LINE,
+    "1\n"
+);
+
+test!(
+    test_in_array_3,
+    "BEGIN { a[4] = 4; a[1,2,3] = 3; print (1,2,3) in a; print (123 in a) }",
+    ONE_LINE,
+    "1\n0\n"
 );

@@ -16,6 +16,10 @@ pub enum Call {
     Malloc,
     Realloc,
     Free,
+    ArrayAssign,
+    ArrayAccess,
+    InArray,
+    ConcatArrayIndices
 }
 
 pub struct CallLog {

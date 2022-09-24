@@ -1,11 +1,13 @@
 use crate::parser::{Stmt, TypedExpr};
 use crate::Expr;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 // Returns 0. the list of all variables  1. All string constants
 pub struct ExtractResults {
     pub vars: HashSet<String>,
     pub str_consts: HashSet<String>,
+    // Give all arrays a numeric identifier that the runtime will use to track them. This is cheaper than using strings at runtime.
+    pub arrays: HashMap<String, i32>,
 }
 
 struct Extractor {
@@ -13,13 +15,19 @@ struct Extractor {
 }
 
 pub fn extract(prog: &Stmt) -> ExtractResults {
-    let results = ExtractResults { vars: HashSet::default(), str_consts: HashSet::default() };
+    let results = ExtractResults { vars: HashSet::default(), str_consts: HashSet::default(), arrays: HashMap::default() };
     let mut extractor = Extractor { results };
     extractor.extract_stmt(prog);
     extractor.results
 }
 
 impl Extractor {
+
+    fn add_array(&mut self, name: String) {
+        if !self.results.arrays.contains_key(&name) {
+            self.results.arrays.insert(name, self.results.arrays.len() as i32);
+        }
+    }
     fn extract_stmt(&mut self, stmt: &Stmt) {
         match stmt {
             Stmt::Expr(expr) => self.extract_expr(expr),
@@ -84,16 +92,19 @@ impl Extractor {
                 self.extract_expr(expr2);
             }
             Expr::ArrayIndex { name, indices } => {
+                self.add_array(name.clone());
                 for idx in indices {
                     self.extract_expr(idx);
                 }
             }
             Expr::InArray { indices, name } => {
+                self.add_array(name.clone());
                 for idx in indices {
                     self.extract_expr(idx);
                 }
             }
             Expr::ArrayAssign { name, indices, value } => {
+                self.add_array(name.clone());
                 for idx in indices {
                     self.extract_expr(idx);
                 }

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use crate::codgen::FLOAT_TAG;
 use crate::columns::Columns;
 use crate::lexer::BinOp;
@@ -47,7 +48,7 @@ extern "C" fn next_line(data: *mut c_void) -> f64 {
 
 extern "C" fn column(
     data_ptr: *mut c_void,
-    tag: u8,
+    tag: i8,
     value: f64,
     pointer: *const String,
 ) -> *mut String {
@@ -79,6 +80,14 @@ extern "C" fn concat(
     };
     lhs.push_str(&rhs);
     Rc::into_raw(Rc::new(lhs))
+}
+
+extern "C" fn concat_array_indices(
+    _data_ptr: *mut c_void,
+    left: *const String,
+    right: *const String,
+) -> *const String {
+   todo!("live concat indices");
 }
 
 extern "C" fn empty_string(_data_ptr: *mut c_void) -> *const String {
@@ -164,6 +173,20 @@ extern "C" fn copy_string(_data: *mut c_void, ptr: *mut String) -> *const String
 extern "C" fn print_error(data: *mut std::os::raw::c_void, code: ErrorCode) {
     eprintln!("error {:?}", code)
 }
+
+extern "C" fn array_assign(data: *mut std::os::raw::c_void, index: *mut String, tag: i8, float: f64, value: *mut String) {
+    todo!()
+}
+
+extern "C" fn array_access(data: *mut std::os::raw::c_void, index: *mut String, out_tag: *mut i8, out_float: *mut f64, out_value: *mut (*mut String)) {
+    todo!()
+}
+
+extern "C" fn in_array(data: *mut c_void, array: i32, index: *mut String) -> f64 {
+    1.0
+}
+
+
 extern "C" fn malloc(_data: *mut std::os::raw::c_void, num_bytes: usize) -> *mut c_void {
     unsafe { libc::malloc(num_bytes) as *mut c_void }
 }
@@ -196,9 +219,13 @@ pub struct LiveRuntime {
     pub print_float: *mut c_void,
     pub copy_string: *mut c_void,
     pub concat: *mut c_void,
+    pub concat_array_indices: *mut c_void,
     pub binop: *mut c_void,
     pub empty_string: *mut c_void,
     pub print_error: *mut c_void,
+    pub array_access: *mut c_void,
+    pub array_assign: *mut c_void,
+    pub in_array: *mut c_void,
 }
 
 impl Drop for LiveRuntime {
@@ -215,7 +242,8 @@ pub struct RuntimeData {
     columns: Columns,
     buffer: String,
     stdout: BufWriter<StdoutLock<'static>>,
-    regex_cache: LruCache<String, Regex>
+    regex_cache: LruCache<String, Regex>,
+    arrays: Vec<HashMap<String, (i8, f64, *mut String)>>
 }
 
 impl RuntimeData {
@@ -224,7 +252,8 @@ impl RuntimeData {
             buffer: String::with_capacity(1000),
             columns: Columns::new(files),
             stdout: BufWriter::new(std::io::stdout().lock()),
-            regex_cache: LruCache::new(10)
+            regex_cache: LruCache::new(10),
+            arrays: vec![],
         }
     }
 }
@@ -256,10 +285,22 @@ impl Runtime for LiveRuntime {
             number_to_string: number_to_string as *mut c_void,
             print_string: print_string as *mut c_void,
             concat: concat as *mut c_void,
+            concat_array_indices: concat_array_indices as *mut c_void,
             print_float: print_float as *mut c_void,
             empty_string: empty_string as *mut c_void,
             binop: binop as *mut c_void,
             print_error: print_error as *mut c_void,
+            array_access: array_access as *mut c_void,
+            array_assign: array_assign as *mut c_void,
+            in_array: in_array   as *mut c_void,
+        }
+    }
+
+    fn allocate_arrays(&mut self, count: usize) {
+        unsafe {
+            for _ in 0..count {
+                (*self.runtime_data).arrays.push(HashMap::new());
+            }
         }
     }
 
@@ -332,6 +373,15 @@ impl Runtime for LiveRuntime {
         )
     }
 
+    fn concat_array_indices(&mut self, func: &mut Function, ptr1: Value, ptr2: Value) -> Value {
+        let data_ptr = self.data_ptr(func);
+        func.insn_call_native(
+            self.concat_array_indices,
+            vec![data_ptr, ptr1, ptr2],
+            Some(Context::void_ptr_type()),
+        )
+    }
+
     fn empty_string(&mut self, func: &mut Function) -> Value {
         let data_ptr = self.data_ptr(func);
         func.insn_call_native(
@@ -359,6 +409,24 @@ impl Runtime for LiveRuntime {
             vec![data_ptr, binop],
             None,
         );
+    }
+
+    fn array_access(&mut self, func: &mut Function, array: i32, index: Value, out_tag_ptr: Value, out_float_ptr: Value, out_ptr_ptr: Value) {
+        let data_ptr = self.data_ptr(func);
+        let array = func.create_int_constant(array);
+        func.insn_call_native(self.array_access, vec![data_ptr, array, index, out_tag_ptr, out_float_ptr, out_ptr_ptr], None);
+    }
+
+    fn array_assign(&mut self, func: &mut Function, array: i32, index: Value, tag: Value, float: Value, ptr: Value) {
+        let data_ptr = self.data_ptr(func);
+        let array = func.create_int_constant(array);
+        func.insn_call_native(self.array_assign, vec![data_ptr, array, index, tag, float, ptr], None);
+    }
+
+    fn in_array(&mut self, func: &mut Function, array: i32, index: Value) -> Value {
+        let data_ptr = self.data_ptr(func);
+        let array = func.create_int_constant(array);
+        func.insn_call_native(self.in_array, vec![data_ptr, array, index], Some(Context::float64_type()))
     }
 }
 
