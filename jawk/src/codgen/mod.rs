@@ -20,6 +20,7 @@ use gnu_libjit::{Abi, Context, Function, Label, Value};
 use std::collections::{HashMap, HashSet};
 use std::os::raw::{c_char, c_long, c_void};
 use std::rc::Rc;
+use crate::parser::Stmt::Print;
 
 /// ValueT is the jit values that make up a struct. It's not a tagged union
 /// just a struct with only one other field being valid to read at a time based on the tag field.
@@ -83,6 +84,8 @@ struct CodeGen<'a, RuntimeT: Runtime> {
     // To avoid creating tons of constants just reuse the tags here
     float_tag: Value,
     string_tag: Value,
+
+    break_lbl: Vec<Label>, // Where a 'break' keyword should jump
 }
 
 impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
@@ -111,6 +114,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
             function.create_value_float64(),
             function.create_value_void_ptr(),
         );
+
         let subroutines = Subroutines::new(&mut context, runtime);
         let codegen = CodeGen {
             array_map: HashMap::new(),
@@ -126,6 +130,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
             zero_f,
             float_tag,
             string_tag,
+            break_lbl: vec![],
         };
         codegen
     }
@@ -159,6 +164,13 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
 
     fn compile_stmt(&mut self, stmt: &Stmt) -> Result<(), PrintableError> {
         match stmt {
+            Stmt::Break => {
+                if let Some(lbl) = self.break_lbl.last_mut() {
+                    self.function.insn_branch(lbl)
+                } else {
+                    return Err(PrintableError::new("Found break keyword outside of a loop"));
+                }
+            }
             Stmt::Expr(expr) => {
                 let res = self.compile_expr(expr)?;
                 self.drop_if_str(&res, expr.typ);
@@ -212,14 +224,16 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
             Stmt::While(test, body) => {
                 let mut test_label = Label::new();
                 let mut done_label = Label::new();
+                self.break_lbl.push(done_label.clone());
                 self.function.insn_label(&mut test_label);
                 let test_value = self.compile_expr(test)?;
                 let bool_value = self.truthy_ret_integer(&test_value, test.typ);
                 self.drop_if_str(&test_value, test.typ);
                 self.function.insn_branch_if_not(&bool_value, &mut done_label);
-                self.compile_stmt(body);
+                self.compile_stmt(body)?;
                 self.function.insn_branch(&mut test_label);
                 self.function.insn_label(&mut done_label);
+                self.break_lbl.pop().unwrap();
             }
         }
         Ok(())

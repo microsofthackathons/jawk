@@ -15,11 +15,13 @@ pub enum Stmt {
     Group(Vec<Stmt>),
     If(TypedExpr, Box<Stmt>, Option<Box<Stmt>>),
     While(TypedExpr, Box<Stmt>),
+    Break,
 }
 
 impl Display for Stmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+
             Stmt::Expr(expr) => write!(f, "{}", expr)?,
             Stmt::Print(expr) => write!(f, "print {}", expr)?,
             Stmt::Group(group) => {
@@ -36,6 +38,7 @@ impl Display for Stmt {
             Stmt::While(test, body) => {
                 write!(f, "while {} {{{}}} ", test, body)?;
             }
+            Stmt::Break => write!(f, "break")?,
         };
         write!(f, "\n")
     }

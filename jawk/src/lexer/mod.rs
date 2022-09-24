@@ -136,6 +136,8 @@ impl Lexer {
             self.add_token(Token::Print);
         } else if src == "in" {
             self.add_token(Token::In);
+        } else if src == "break" {
+            self.add_token(Token::Break);
         } else {
             self.add_token(Token::Ident(src));
         }

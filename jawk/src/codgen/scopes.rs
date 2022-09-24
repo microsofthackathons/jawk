@@ -34,6 +34,10 @@ impl Scopes {
         if self.arrays.contains_key(name) {
             return Err(PrintableError::new(format!("fatal: attempt to use array `{}` in a scalar context", name)))
         }
-        Ok(self.scalars.get(name).unwrap())
+        if let Some(scalar) = self.scalars.get(name) {
+            Ok(scalar)
+        } else {
+            panic!("Scalar {} does not exist", name);
+        }
     }
 }

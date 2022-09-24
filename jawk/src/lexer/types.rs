@@ -105,6 +105,7 @@ pub enum Token {
     RightBracket,
     In,
     Comma,
+    Break,
 }
 
 #[derive(Debug, Clone, PartialOrd, PartialEq, Hash, Eq, Ord)]
@@ -156,6 +157,7 @@ pub enum TokenType {
     RightBracket,
     In,
     Comma,
+    Break,
 }
 
 impl Token {
@@ -215,6 +217,7 @@ impl Token {
             Token::RightBracket => TokenType::RightBracket,
             Token::In => TokenType::In,
             Token::Comma => TokenType::Comma,
+            Token::Break => TokenType::Break,
         }
     }
 }
@@ -269,6 +272,7 @@ impl TokenType {
             TokenType::RightBracket => "]",
             TokenType::In => "in",
             TokenType::Comma => ",",
+            TokenType::Break => "break",
         }
     }
 }

@@ -30,6 +30,7 @@ impl Extractor {
     }
     fn extract_stmt(&mut self, stmt: &Stmt) {
         match stmt {
+            Stmt::Break => {},
             Stmt::Expr(expr) => self.extract_expr(expr),
             Stmt::Print(expr) => self.extract_expr(expr),
             Stmt::Group(group) => {
@@ -108,6 +109,7 @@ impl Extractor {
                 for idx in indices {
                     self.extract_expr(idx);
                 }
+                self.extract_expr(value);
             }
         }
     }

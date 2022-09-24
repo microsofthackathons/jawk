@@ -163,6 +163,8 @@ impl Parser {
     fn stmt(&mut self) -> Stmt {
         let stmt = if self.matches(vec![TokenType::Print]) {
             Stmt::Print(self.expression())
+        } else if self.matches(vec![TokenType::Break]) {
+            Stmt::Break
         } else if self.matches(vec![TokenType::For]) {
             self.consume(TokenType::LeftParen, "Expected a '(' after the for keyword");
             let init = self.stmt();

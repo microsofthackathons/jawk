@@ -186,15 +186,15 @@ impl Function {
     unary_op!(insn_not, jit_insn_not);
 
     pub fn insn_branch(&self, label: &mut Label) {
-        unsafe { jit_insn_branch(self.function, &mut label.inner as *mut jit_label_t); }
+        unsafe { jit_insn_branch(self.function, label.into()) };
     }
 
     pub fn insn_branch_if(&self, value: &Value, label: &mut Label) {
-        unsafe { jit_insn_branch_if(self.function, value.value, &mut label.inner as *mut jit_label_t); }
+        unsafe { jit_insn_branch_if(self.function, value.value, label.into()) };
     }
 
     pub fn insn_branch_if_not(&self, value: &Value, label: &mut Label) {
-        unsafe { jit_insn_branch_if_not(self.function, value.value, &mut label.inner as *mut jit_label_t); }
+        unsafe { jit_insn_branch_if_not(self.function, value.value, label.into()); }
     }
 
     pub fn insn_load(&mut self, ptr: &Value) -> Value {
@@ -249,8 +249,7 @@ impl Function {
     }
 
     pub fn insn_label(&self, label: &mut Label) {
-        let lbl_ptr = (&mut label.inner) as *mut jit_label_t;
-        unsafe { jit_insn_label(self.function, lbl_ptr); }
+        unsafe { jit_insn_label(self.function, label.into()); }
     }
 
     // Round value up towards positive infinity.
