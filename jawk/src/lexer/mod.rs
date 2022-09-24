@@ -107,7 +107,7 @@ impl Lexer {
     }
 
     fn identifier(&mut self) -> Result<(), String> {
-        while self.peek().is_alphanumeric() {
+        while self.peek().is_alphanumeric() || self.peek() == '_' {
             self.advance();
         }
         let src: String = self.src[self.start..self.current].iter().collect();

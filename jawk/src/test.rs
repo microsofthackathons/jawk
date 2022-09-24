@@ -57,21 +57,24 @@ fn test_against(interpreter: &str, prog: &str, oracle_output: &str, file: &PathB
 
 const PERF_RUNS: u128 = 10;
 
-fn test_perf(interpreter: &str, prog: &str, file: &PathBuf) {
+fn test_perf(interpreter: &str, prog: &str, oracle_output: &str, file: &PathBuf) {
     match std::process::Command::new(interpreter).output() {
         Ok(_) => {}
         Err(err) => return, // this interpreter doesn't exist
     }
     let mut our_total = 0;
     let mut other_total = 0;
+
     for _ in 0..PERF_RUNS {
+        let our_result = test_once("./target/release/jawk", prog, file);
         other_total += test_once(interpreter, prog, file).1.as_micros();
-        our_total += test_once("./target/release/jawk", prog, file).1.as_micros();
+        our_total += our_result.1.as_micros();
+        assert_eq!(our_result.0, oracle_output, "perf-test : LEFT jawk, RIGHT oracle didn't match. DID YOU DO A RELEASE BUILD?");
     }
     our_total /= PERF_RUNS;
     other_total /= PERF_RUNS;
 
-    assert!(our_total < other_total || our_total < 5*1000, "jawk={}ms {}={}ms", our_total/1000, interpreter, other_total/1000);
+    assert!(our_total < other_total || our_total < 5*1000, "perf-test: jawk={}ms {}={}ms", our_total/1000, interpreter, other_total/1000);
 }
 
 fn test_it<S: AsRef<str>>(prog: &str, file: S, oracle_output: &str) {
@@ -98,11 +101,10 @@ fn test_it<S: AsRef<str>>(prog: &str, file: S, oracle_output: &str) {
     test_against("onetrueawk", prog, oracle_output, &file_path);
 
     if std::env::vars().any(|f| f.0 == "jperf" && (f.1 == "true" || f.1 == "true\n")) {
-
-        test_perf("awk", prog, &file_path);
-        test_perf("mawk", prog, &file_path);
-        test_perf("goawk", prog, &file_path);
-        test_perf("onetrueawk", prog, &file_path);
+        test_perf("awk", prog, oracle_output, &file_path);
+        test_perf("mawk", prog, oracle_output, &file_path);
+        test_perf("goawk", prog, oracle_output, &file_path);
+        test_perf("onetrueawk", prog, oracle_output, &file_path);
     }
 }
 
@@ -907,4 +909,11 @@ test!(
     "BEGIN { a[4] = 4; a[1,2,3] = 3; print (1,2,3) in a; print (123 in a) }",
     ONE_LINE,
     "1\n0\n"
+);
+
+test!(
+    test_two_arrays,
+    "BEGIN { a[0] = 1; a[1] =1; b[0] = 2; b[1] = 3; x=2; while (x++ < 40) { a[x] = a[x-1] + a[x-2]; b[x] = b[x-1] + b[x-2]; print a[x]; print b[x] }}",
+    ONE_LINE,
+    "1\n3\n1\n3\n2\n6\n3\n9\n5\n15\n8\n24\n13\n39\n21\n63\n34\n102\n55\n165\n89\n267\n144\n432\n233\n699\n377\n1131\n610\n1830\n987\n2961\n1597\n4791\n2584\n7752\n4181\n12543\n6765\n20295\n10946\n32838\n17711\n53133\n28657\n85971\n46368\n139104\n75025\n225075\n121393\n364179\n196418\n589254\n317811\n953433\n514229\n1542687\n832040\n2496120\n1346269\n4038807\n2178309\n6534927\n3524578\n10573734\n5702887\n17108661\n9227465\n27682395\n14930352\n44791056\n24157817\n72473451\n39088169\n117264507\n"
 );

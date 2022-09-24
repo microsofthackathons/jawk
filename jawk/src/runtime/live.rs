@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::codgen::FLOAT_TAG;
+use crate::codgen::{FLOAT_TAG, STRING_TAG};
 use crate::columns::Columns;
 use crate::lexer::BinOp;
 use crate::runtime::{ErrorCode, Runtime};
@@ -80,14 +80,6 @@ extern "C" fn concat(
     };
     lhs.push_str(&rhs);
     Rc::into_raw(Rc::new(lhs))
-}
-
-extern "C" fn concat_array_indices(
-    _data_ptr: *mut c_void,
-    left: *const String,
-    right: *const String,
-) -> *const String {
-   todo!("live concat indices");
 }
 
 extern "C" fn empty_string(_data_ptr: *mut c_void) -> *const String {
@@ -174,18 +166,81 @@ extern "C" fn print_error(data: *mut std::os::raw::c_void, code: ErrorCode) {
     eprintln!("error {:?}", code)
 }
 
-extern "C" fn array_assign(data: *mut std::os::raw::c_void, index: *mut String, tag: i8, float: f64, value: *mut String) {
-    todo!()
+extern "C" fn array_assign(data_ptr: *mut std::os::raw::c_void,
+                           array: i32,
+                           index: *mut String, tag: i8, float: f64, ptr: *mut String) {
+    let data = cast_to_runtime_data(data_ptr);
+    let index = unsafe {
+        Rc::from_raw(index)
+    };
+    let array = &mut data.arrays[array as usize];
+
+    if let Some(val) = array.get_mut(&*index) {
+        if val.0 == STRING_TAG {
+            free_string(data_ptr, val.2);
+        }
+        val.0 = tag;
+        val.1 = float;
+        val.2 = ptr;
+    } else {
+        array.insert(index, (tag, float, ptr));
+    }
 }
 
-extern "C" fn array_access(data: *mut std::os::raw::c_void, index: *mut String, out_tag: *mut i8, out_float: *mut f64, out_value: *mut (*mut String)) {
-    todo!()
+extern "C" fn array_access(data_ptr: *mut std::os::raw::c_void,
+                           array: i32,
+                           index: *mut String,
+                           out_tag: *mut i8,
+                           out_float: *mut f64,
+                           out_value: *mut (*mut String)) {
+    let data = cast_to_runtime_data(data_ptr);
+    let index = unsafe {
+        Rc::from_raw(index)
+    };
+
+    let array = &mut data.arrays[array as usize];
+    unsafe {
+        if let Some((tag, float, str)) = array.get(&*index) {
+            *out_tag = *tag;
+            *out_float = *float;
+            if *tag == STRING_TAG {
+                let rc = unsafe { Rc::from_raw(*str) };
+                let cloned = rc.clone();
+                Rc::into_raw(rc);
+                *out_value = Rc::into_raw(cloned) as *mut String;
+            }
+        } else {
+            *out_tag = STRING_TAG;
+            *out_value = empty_string(data_ptr) as *mut String;
+        }
+    }
 }
 
-extern "C" fn in_array(data: *mut c_void, array: i32, index: *mut String) -> f64 {
-    1.0
+extern "C" fn in_array(data_ptr: *mut c_void, array: i32, index: *mut String) -> f64 {
+    let indices = unsafe { Rc::from_raw(index) };
+    let data = cast_to_runtime_data(data_ptr);
+    let array = &data.arrays[array as usize];
+    unsafe {
+        if array.contains_key(&*index) { 1.0 } else { 0.0 }
+    }
 }
 
+extern "C" fn concat_array_indices(
+    _data: *mut c_void,
+    left: *const String,
+    right: *const String,
+) -> *const String {
+    let lhs = unsafe { Rc::from_raw(left) };
+    let rhs = unsafe { Rc::from_raw(right) };
+
+    let mut lhs: String = match Rc::try_unwrap(lhs) {
+        Ok(str) => str,
+        Err(rc) => (*rc).clone(),
+    };
+    lhs.push_str("-");
+    lhs.push_str(&rhs);
+    Rc::into_raw(Rc::new(lhs))
+}
 
 extern "C" fn malloc(_data: *mut std::os::raw::c_void, num_bytes: usize) -> *mut c_void {
     unsafe { libc::malloc(num_bytes) as *mut c_void }
@@ -243,7 +298,7 @@ pub struct RuntimeData {
     buffer: String,
     stdout: BufWriter<StdoutLock<'static>>,
     regex_cache: LruCache<String, Regex>,
-    arrays: Vec<HashMap<String, (i8, f64, *mut String)>>
+    arrays: Vec<HashMap<Rc<String>, (i8, f64, *mut String)>>
 }
 
 impl RuntimeData {
