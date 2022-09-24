@@ -7,6 +7,7 @@ use gnu_libjit::{Context, Function, Value};
 pub use live::LiveRuntime;
 use std::ffi::c_void;
 pub use testing::TestRuntime;
+use crate::codgen::ValueT;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -34,4 +35,5 @@ pub trait Runtime {
     fn array_assign(&mut self, func: &mut Function, array: i32, index: Value, tag: Value, float: Value, ptr: Value);
     fn in_array(&mut self, func: &mut Function, array: i32, index: Value) -> Value;
     fn concat_array_indices(&mut self, func: &mut Function, lhs: Value, rhs: Value) -> Value;
+    fn printf(&mut self, func: &mut Function, fstring: Value, nargs: Value, args: Value);
 }

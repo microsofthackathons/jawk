@@ -1,5 +1,6 @@
 use crate::lexer::{BinOp, LogicalOp, MathOp};
 use std::fmt::{Display, Formatter};
+use libc::write;
 
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum ScalarType {
@@ -15,13 +16,19 @@ pub enum Stmt {
     Group(Vec<Stmt>),
     If(TypedExpr, Box<Stmt>, Option<Box<Stmt>>),
     While(TypedExpr, Box<Stmt>),
+    Printf { fstring: TypedExpr, args: Vec<TypedExpr> },
     Break,
 }
 
 impl Display for Stmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-
+            Stmt::Printf { fstring, args } => {
+                write!(f, "printf \"{}\"", fstring)?;
+                for mem in args {
+                    write!(f, "{},", mem.expr)?;
+                }
+            }
             Stmt::Expr(expr) => write!(f, "{}", expr)?,
             Stmt::Print(expr) => write!(f, "print {}", expr)?,
             Stmt::Group(group) => {

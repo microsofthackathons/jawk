@@ -162,7 +162,14 @@ impl Parser {
 
     fn stmt(&mut self) -> Stmt {
         let stmt = if self.matches(vec![TokenType::Print]) {
-            Stmt::Print(self.expression())
+            Stmt::Print(self.expression()) // TODO: print 1,2,3
+        } else if self.matches(vec![TokenType::Printf]) {
+            let fstring = self.expression();
+            let mut args = vec![];
+            while self.matches(vec![TokenType::Comma]) {
+                args.push(self.expression());
+            }
+            Stmt::Printf { fstring, args }
         } else if self.matches(vec![TokenType::Break]) {
             Stmt::Break
         } else if self.matches(vec![TokenType::For]) {
@@ -452,6 +459,7 @@ impl Parser {
             TokenType::In,
             TokenType::LeftBracket,
             TokenType::RightBracket,
+            TokenType::Printf,
         ];
         while !self.is_at_end() && !not_these.contains(&self.peek().ttype()) {
             if let Expr::Concatenation(vals) = &mut expr.expr {
@@ -1318,8 +1326,22 @@ fn array_assign_multi_expr() {
     let zero = bnum!(0.0);
     let one = bnum!(1.0);
     let op = Expr::MathOp(zero, MathOp::Plus, one).into();
-    let a_zero = Expr::ArrayIndex {name: "a".to_string(), indices: vec![num!(0.0)]}.into();
+    let a_zero = Expr::ArrayIndex { name: "a".to_string(), indices: vec![num!(0.0)] }.into();
     let expr = texpr!(Expr::ArrayIndex{name: "a".to_string(),indices: vec![op, a_zero]});
     let stmt = Stmt::Expr(expr);
+    assert_eq!(actual, sprogram!(stmt));
+}
+
+#[test]
+fn test_printf_simple() {
+    actual!(actual, "{ printf 1 }");
+    let stmt = Stmt::Printf { fstring: num!(1.0), args: vec![] }.into();
+    assert_eq!(actual, sprogram!(stmt));
+}
+
+#[test]
+fn test_printf_multi() {
+    actual!(actual, "{ printf \"%s%s%s\", 1, 2, 3 }");
+    let stmt = Stmt::Printf { fstring: Expr::String("%s%s%s".to_string()).into(), args: vec![num!(1.0), num!(2.0), num!(3.0)] }.into();
     assert_eq!(actual, sprogram!(stmt));
 }

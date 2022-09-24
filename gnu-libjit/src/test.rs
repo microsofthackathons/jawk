@@ -409,7 +409,7 @@ fn test_native_func_passing_a_ptr_over_ffi() {
     let mut func = context.function(Abi::Cdecl, ubyte_type, vec![ubyte_type]).unwrap();
     let ptr_constant = func.create_void_ptr_constant(ptr_to_value);
     let zero = func.create_ubyte_constant(0);
-    func.insn_call_native(add_one_to_value as *mut libc::c_void, vec![ptr_constant], None);
+    func.insn_call_native(add_one_to_value as *mut libc::c_void, vec![ptr_constant], None, Abi::Cdecl);
     func.insn_return(&zero);
     func.compile();
     let result: extern "C" fn(i8) -> i8 = func.to_closure();
@@ -430,7 +430,7 @@ fn test_native_with_ret_type() {
     let mut context = Context::new();
     context.build_start();
     let mut func = context.function(Abi::Cdecl, Context::float64_type(), vec![Context::float64_type()]).unwrap();
-    let ret = func.insn_call_native(ret_f64 as *mut libc::c_void, vec![], Some(Context::float64_type()));
+    let ret = func.insn_call_native(ret_f64 as *mut libc::c_void, vec![], Some(Context::float64_type()), Abi::Cdecl);
     func.insn_return(&ret);
     func.compile();
     context.build_end();

@@ -947,3 +947,9 @@ test!(
     "40\n1200\n"
 );
 
+test!(
+    test_printf_simple_f,
+    "BEGIN {printf \"test\"}",
+    ONE_LINE,
+    "test"
+);

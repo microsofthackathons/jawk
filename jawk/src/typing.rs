@@ -52,6 +52,11 @@ impl TypeAnalysis {
 
     fn analyze_stmt(&mut self, stmt: &mut Stmt) -> Result<(), PrintableError>{
         match stmt {
+            Stmt::Printf {args, fstring} => {
+                for arg in args {
+                    self.analyze_expr(arg)?;
+                }
+            }
             Stmt::Break => {},
             Stmt::Expr(expr) => self.analyze_expr(expr)?,
             Stmt::Print(expr) => self.analyze_expr(expr)?,

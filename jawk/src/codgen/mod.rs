@@ -18,7 +18,7 @@ use crate::runtime::{LiveRuntime, Runtime, TestRuntime};
 use crate::Expr;
 use gnu_libjit::{Abi, Context, Function, Label, Value};
 use std::collections::{HashMap, HashSet};
-use std::os::raw::{c_char, c_long, c_void};
+use std::os::raw::{c_char, c_int, c_long, c_void};
 use std::rc::Rc;
 use crate::parser::Stmt::Print;
 
@@ -76,6 +76,9 @@ struct CodeGen<'a, RuntimeT: Runtime> {
     // Stack space to use for passing multiple return values from the runtime.
     ptr_scratch: ValuePtrT,
 
+    // Var arg scratch for passing a variable # of printf args (max 64) allocated on the heap
+    var_arg_scratch: Value,
+
     // Used to init the pointer section of the value struct when it's undefined. Should never be dereferenced.
     zero_ptr: Value,
     // Used to init the float section of value. Safe to use but using it is a bug.
@@ -115,8 +118,13 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
             function.create_value_void_ptr(),
         );
 
+
+        let var_arg_scratch = unsafe { libc::malloc(100 * 8) };
+        let var_arg_scratch = function.create_void_ptr_constant(var_arg_scratch);
+
         let subroutines = Subroutines::new(&mut context, runtime);
         let codegen = CodeGen {
+            var_arg_scratch,
             array_map: HashMap::new(),
             function,
             scopes: Scopes::new(),
@@ -164,6 +172,19 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
 
     fn compile_stmt(&mut self, stmt: &Stmt) -> Result<(), PrintableError> {
         match stmt {
+            Stmt::Printf { args, fstring } => {
+                let fstring_val = self.compile_expr(fstring)?;
+                let fstring_ptr = self.to_string(&fstring_val, fstring.typ);
+                // write all the values into scratch space. Runtime will read from that pointer
+                for (idx, arg) in args.iter().enumerate() {
+                    let compiled = self.compile_expr(arg)?;
+                    self.function.insn_store_relative(&self.var_arg_scratch, (idx * 24) as c_long, compiled.tag);
+                    self.function.insn_store_relative(&self.var_arg_scratch, (idx * 24 + 8) as c_long, compiled.float);
+                    self.function.insn_store_relative(&self.var_arg_scratch, (idx * 24 + 16) as c_long, compiled.pointer);
+                }
+                let nargs = self.function.create_int_constant(args.len() as c_int);
+                self.runtime.printf(&mut self.function, fstring_ptr, nargs, self.var_arg_scratch.clone());
+            }
             Stmt::Break => {
                 if let Some(lbl) = self.break_lbl.last_mut() {
                     self.function.insn_branch(lbl)

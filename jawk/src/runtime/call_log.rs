@@ -19,7 +19,8 @@ pub enum Call {
     ArrayAssign,
     ArrayAccess,
     InArray,
-    ConcatArrayIndices
+    ConcatArrayIndices,
+    Printf,
 }
 
 pub struct CallLog {

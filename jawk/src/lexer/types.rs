@@ -90,6 +90,7 @@ pub enum Token {
     RightParen,
     Regex(String),
     Print,
+    Printf,
     Ret,
     If,
     Begin,
@@ -137,6 +138,7 @@ pub enum TokenType {
     LeftParen,
     RightParen,
     Print,
+    Printf,
     Semicolon,
     Eq,
     Ret,
@@ -218,6 +220,7 @@ impl Token {
             Token::In => TokenType::In,
             Token::Comma => TokenType::Comma,
             Token::Break => TokenType::Break,
+            Token::Printf => TokenType::Printf,
         }
     }
 }
@@ -273,6 +276,7 @@ impl TokenType {
             TokenType::In => "in",
             TokenType::Comma => ",",
             TokenType::Break => "break",
+            TokenType::Printf => "printf",
         }
     }
 }

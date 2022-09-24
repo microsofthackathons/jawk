@@ -30,6 +30,12 @@ impl Extractor {
     }
     fn extract_stmt(&mut self, stmt: &Stmt) {
         match stmt {
+            Stmt::Printf{fstring, args} => {
+                for arg in args {
+                    self.extract_expr(arg)
+                }
+                self.extract_expr(fstring);
+            }
             Stmt::Break => {},
             Stmt::Expr(expr) => self.extract_expr(expr),
             Stmt::Print(expr) => self.extract_expr(expr),
