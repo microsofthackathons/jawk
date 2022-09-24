@@ -940,9 +940,6 @@ test!(
     "33\n"
 );
 
-
-
-
 test!(
     test_double_break_loop,
     "BEGIN {while(1) {     z=0; while(1) {if(z==30){break}z++;a++}        y++; if(y==40) {break}} print y; print a;}",

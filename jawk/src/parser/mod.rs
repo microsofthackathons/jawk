@@ -249,9 +249,20 @@ impl Parser {
         self.consume(TokenType::LeftParen, "Expected '(' after if");
         let predicate = self.expression();
         self.consume(TokenType::RightParen, "Expected ')' after if predicate");
-        let then_blk = self.group();
+
+        let then_blk = if self.peek().ttype() == TokenType::LeftBrace {
+            self.group()
+        } else {
+            self.stmt()
+        };
+
         let else_blk = if self.matches(vec![TokenType::Else]) {
-            Some(Box::new(self.group()))
+            let else_blk = if self.peek().ttype() == TokenType::LeftBrace {
+                self.group()
+            } else {
+                self.stmt()
+            };
+            Some(Box::new(else_blk))
         } else {
             None
         };
