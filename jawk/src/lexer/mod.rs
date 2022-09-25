@@ -118,6 +118,8 @@ impl Lexer {
             self.add_token(Token::False);
         } else if src == "return" {
             self.add_token(Token::Ret);
+        } else if src == "function" {
+            self.add_token(Token::Function);
         } else if src == "if" {
             self.add_token(Token::If);
         } else if src == "else" {
@@ -756,3 +758,24 @@ fn test_array_ops_slash_not() {
         ]
     );
 }
+
+
+#[test]
+fn test_function() {
+    let str = "function a() { print 1 }";
+    assert_eq!(
+        lex(str).unwrap(),
+        vec![
+            Token::Function,
+            Token::Ident("a".to_string()),
+            Token::LeftParen,
+            Token::RightParen,
+            Token::LeftBrace,
+            Token::Print,
+            Token::NumberF64(1.0),
+            Token::RightBrace,
+            Token::EOF,
+        ]
+    );
+}
+

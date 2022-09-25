@@ -71,6 +71,7 @@ pub enum Token {
     Eq,
     Semicolon,
     Column,
+    Function,
     BinOp(BinOp),
     // < <= >= >
     MathOp(MathOp),
@@ -159,6 +160,7 @@ pub enum TokenType {
     RightBracket,
     In,
     Comma,
+    Function,
     Break,
 }
 
@@ -166,6 +168,7 @@ impl Token {
     pub fn ttype(&self) -> TokenType {
         // Match statement mapping every single ttype to its id
         match self {
+            Token::Function => TokenType::Function,
             Token::BinOp(bin_op) => match bin_op {
                 BinOp::Greater => TokenType::Greater,
                 BinOp::GreaterEq => TokenType::GreaterEq,
@@ -228,6 +231,7 @@ impl Token {
 impl TokenType {
     pub fn name(token_type: TokenType) -> &'static str {
         match token_type {
+            TokenType::Function => "function",
             TokenType::While => "while",
             TokenType::Minus => "-",
             TokenType::Plus => "+",

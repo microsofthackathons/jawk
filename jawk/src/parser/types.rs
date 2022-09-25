@@ -173,18 +173,33 @@ impl Display for Expr {
 }
 
 #[derive(Debug, PartialEq)]
+pub struct Function {
+    pub name: String,
+    pub args: Vec<String>,
+    pub body: Stmt
+}
+
+impl Function {
+    pub fn new(name: String, args: Vec<String>, body: Stmt) -> Self {
+        Function { name, args, body }
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub struct Program {
     pub begins: Vec<Stmt>,
     pub ends: Vec<Stmt>,
     pub pattern_actions: Vec<PatternAction>,
+    pub functions: Vec<Function>
 }
 
 impl Program {
-    pub fn new(begins: Vec<Stmt>, ends: Vec<Stmt>, pattern_actions: Vec<PatternAction>) -> Program {
+    pub fn new(begins: Vec<Stmt>, ends: Vec<Stmt>, pattern_actions: Vec<PatternAction>, functions: Vec<Function>) -> Program {
         Program {
             begins,
             ends,
             pattern_actions,
+            functions,
         }
     }
     #[allow(dead_code)]
@@ -193,6 +208,7 @@ impl Program {
             begins: vec![],
             ends: vec![],
             pattern_actions: vec![PatternAction::new_action_only(stmt)],
+            functions: vec![],
         }
     }
 }

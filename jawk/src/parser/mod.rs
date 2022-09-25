@@ -3,6 +3,7 @@ mod types;
 use crate::lexer::{BinOp, LogicalOp, MathOp, Token, TokenType};
 pub use crate::parser::types::PatternAction;
 pub use types::{ScalarType, Expr, Program, Stmt, TypedExpr};
+use crate::parser::types::Function;
 
 // Pattern Action Type
 // Normal eg: $1 == "a" { doSomething() }
@@ -29,14 +30,43 @@ impl Parser {
         let mut begin = vec![];
         let mut end = vec![];
         let mut generic = vec![];
+        let mut functions = vec![];
         while !self.is_at_end() {
-            match self.pattern_action() {
-                PAType::Normal(pa) => generic.push(pa),
-                PAType::Begin(pa) => begin.push(pa),
-                PAType::End(pa) => end.push(pa),
+            if self.matches(&[TokenType::Function]) {
+                let name = self.ident_consume("Function name must follow function keyword");
+                self.consume(TokenType::LeftParen, "Function name must be followed by '('");
+                let mut args = vec![];
+                loop {
+                    if self.peek().ttype() != TokenType::RightParen {
+                        args.push(self.ident_consume("Expected function argument name here"));
+                    } else {
+                        break
+                    }
+                    if self.peek().ttype() != TokenType::RightParen {
+                        self.consume(TokenType::Comma, "Expected comma after function argument and before right paren");
+                        continue
+                    }
+                    break
+                }
+                self.consume(TokenType::RightParen, "Expected right paren after function arguments");
+                let body = self.group();
+                functions.push(Function::new(name, args, body))
+            } else {
+                match self.pattern_action() {
+                    PAType::Normal(pa) => generic.push(pa),
+                    PAType::Begin(pa) => begin.push(pa),
+                    PAType::End(pa) => end.push(pa),
+                }
             }
         }
-        Program::new(begin, end, generic)
+        Program::new(begin, end, generic, functions)
+    }
+
+    fn ident_consume(&mut self, error_msg: &str) -> String {
+        if let Token::Ident(ident) = self.consume(TokenType::Ident, error_msg) {
+            return ident;
+        }
+        unreachable!()
     }
 
     fn check(&mut self, typ: TokenType) -> bool {
@@ -60,7 +90,8 @@ impl Parser {
         );
     }
 
-    fn matches(&mut self, tokens: Vec<TokenType>) -> bool {
+
+    fn matches(&mut self, tokens: &[TokenType]) -> bool {
         let tkn = match self.tokens.get(self.current) {
             None => return false,
             Some(t) => t.ttype().clone(),
@@ -113,18 +144,18 @@ impl Parser {
     }
 
     fn pattern_action(&mut self) -> PAType {
-        let b = if self.matches(vec![TokenType::LeftBrace]) {
+        let b = if self.matches(&[TokenType::LeftBrace]) {
             // { print 1; }
             let pa = PAType::Normal(PatternAction::new_action_only(self.stmts()));
             self.consume(TokenType::RightBrace, "Expected '}' after action block");
             pa
-        } else if self.matches(vec![TokenType::Begin]) {
+        } else if self.matches(&[TokenType::Begin]) {
             // BEGIN { print 1; }
             self.consume(TokenType::LeftBrace, "Expected a '{' after a begin");
             let pa = PAType::Begin(self.stmts());
             self.consume(TokenType::RightBrace, "Begin action should end with '}'");
             pa
-        } else if self.matches(vec![TokenType::End]) {
+        } else if self.matches(&[TokenType::End]) {
             // END { print 1; }
             self.consume(TokenType::LeftBrace, "Expected a {' after a end");
             let pa = PAType::End(self.stmts());
@@ -132,7 +163,7 @@ impl Parser {
             pa
         } else {
             let test = self.expression();
-            if self.matches(vec![TokenType::LeftBrace]) {
+            if self.matches(&[TokenType::LeftBrace]) {
                 // test { print 1; }
                 let pa = PAType::Normal(PatternAction::new(Some(test), self.stmts()));
                 self.consume(TokenType::RightBrace, "Patern action should end with '}'");
@@ -146,9 +177,9 @@ impl Parser {
         b
     }
     fn group(&mut self) -> Stmt {
-        self.consume(TokenType::LeftBrace, "Expected a '}'");
+        self.consume(TokenType::LeftBrace, "Expected a '{' to start group");
         let s = self.stmts();
-        self.consume(TokenType::RightBrace, "Expected a '}'");
+        self.consume(TokenType::RightBrace, "Expected a '}' to end group");
         s
     }
 
@@ -161,18 +192,18 @@ impl Parser {
     }
 
     fn stmt(&mut self) -> Stmt {
-        let stmt = if self.matches(vec![TokenType::Print]) {
+        let stmt = if self.matches(&[TokenType::Print]) {
             Stmt::Print(self.expression()) // TODO: print 1,2,3
-        } else if self.matches(vec![TokenType::Printf]) {
+        } else if self.matches(&[TokenType::Printf]) {
             let fstring = self.expression();
             let mut args = vec![];
-            while self.matches(vec![TokenType::Comma]) {
+            while self.matches(&[TokenType::Comma]) {
                 args.push(self.expression());
             }
             Stmt::Printf { fstring, args }
-        } else if self.matches(vec![TokenType::Break]) {
+        } else if self.matches(&[TokenType::Break]) {
             Stmt::Break
-        } else if self.matches(vec![TokenType::For]) {
+        } else if self.matches(&[TokenType::For]) {
             self.consume(TokenType::LeftParen, "Expected a '(' after the for keyword");
             let init = self.stmt();
             self.consume(
@@ -209,9 +240,9 @@ impl Parser {
                 str,
                 Box::new(self.expression()),
             )))
-            // } else if self.matches(vec![TokenType::Ret]) {
+            // } else if self.any_match(&[TokenType::Ret]) {
             //     self.return_stmt()
-        } else if self.matches(vec![TokenType::While]) {
+        } else if self.matches(&[TokenType::While]) {
             self.consume(TokenType::LeftParen, "Must have paren after while");
             let expr = self.expression();
             self.consume(
@@ -222,12 +253,12 @@ impl Parser {
             let stmts = self.stmts();
             self.consume(TokenType::RightBrace, "While loop must be followed by '}'");
             Stmt::While(expr, Box::new(stmts))
-        } else if self.matches(vec![TokenType::Print]) {
+        } else if self.matches(&[TokenType::Print]) {
             let expr = self.expression();
             Stmt::Print(expr)
-        } else if self.matches(vec![TokenType::If]) {
+        } else if self.matches(&[TokenType::If]) {
             self.if_stmt()
-        } else if self.matches(vec![TokenType::LeftBrace]) {
+        } else if self.matches(&[TokenType::LeftBrace]) {
             let s = self.stmts();
             self.consume(
                 TokenType::RightBrace,
@@ -263,7 +294,7 @@ impl Parser {
             self.stmt()
         };
 
-        let else_blk = if self.matches(vec![TokenType::Else]) {
+        let else_blk = if self.matches(&[TokenType::Else]) {
             let else_blk = if self.peek().ttype() == TokenType::LeftBrace {
                 self.group()
             } else {
@@ -284,10 +315,10 @@ impl Parser {
         let mut expr = self.ternary();
         if let Expr::Variable(var) = &expr.expr {
             let var = var.clone();
-            if self.matches(vec![TokenType::Eq]) {
+            if self.matches(&[TokenType::Eq]) {
                 // =
                 return TypedExpr::new(Expr::ScalarAssign(var, Box::new(self.assignment())));
-            } else if self.matches(vec![TokenType::InplaceAssign]) {
+            } else if self.matches(&[TokenType::InplaceAssign]) {
                 // ?=
                 let math_op = if let Token::InplaceEq(math_op) = self.previous().unwrap() { math_op } else { unreachable!() };
                 let expr = Expr::MathOp(
@@ -304,7 +335,7 @@ impl Parser {
         if let Expr::ArrayIndex { .. } = &expr.expr {
             is_array_index = true;
         }
-        if is_array_index && self.matches(vec![TokenType::Eq]) {
+        if is_array_index && self.matches(&[TokenType::Eq]) {
             if let Expr::ArrayIndex { name, indices } = expr.expr {
                 let value = Box::new(self.assignment());
                 return Expr::ArrayAssign { name, indices, value }.into();
@@ -317,7 +348,7 @@ impl Parser {
 
     fn ternary(&mut self) -> TypedExpr {
         let mut cond = self.logical_or();
-        while self.matches(vec![TokenType::Question]) {
+        while self.matches(&[TokenType::Question]) {
             let expr1 = self.ternary();
             self.consume(TokenType::Colon, "Expected a colon after question mark in a ternary!");
             let expr2 = self.ternary();
@@ -332,7 +363,7 @@ impl Parser {
 
     fn logical_or(&mut self) -> TypedExpr {
         let mut expr = self.logical_and();
-        while self.matches(vec![TokenType::Or]) {
+        while self.matches(&[TokenType::Or]) {
             expr = TypedExpr::new(Expr::LogicalOp(
                 Box::new(expr),
                 LogicalOp::Or,
@@ -344,7 +375,7 @@ impl Parser {
 
     fn logical_and(&mut self) -> TypedExpr {
         let mut expr = self.array_membership();
-        while self.matches(vec![TokenType::And]) {
+        while self.matches(&[TokenType::And]) {
             expr = TypedExpr::new(Expr::LogicalOp(
                 Box::new(expr),
                 LogicalOp::And,
@@ -357,7 +388,7 @@ impl Parser {
     fn array_membership(&mut self) -> TypedExpr {
         // <expr> in array_name
         let mut expr = self.multi_dim_array_membership();
-        while self.matches(vec![TokenType::In]) {
+        while self.matches(&[TokenType::In]) {
             let name = if let Token::Ident(name) = self.consume(TokenType::Ident, "An array name must follow `<expr> in`") { name } else { unreachable!() };
             expr = Expr::InArray { name, indices: vec![expr] }.into()
         }
@@ -367,7 +398,7 @@ impl Parser {
     fn helper_multi_dim_array(&mut self) -> TypedExpr {
         self.consume(TokenType::LeftParen, "Multidimensional array must begin with left paren");
         let mut exprs = vec![self.regex()];
-        while self.matches(vec![TokenType::Comma]) {
+        while self.matches(&[TokenType::Comma]) {
             if self.peek().ttype() == TokenType::RightParen { break; }
             exprs.push(self.regex());
         }
@@ -377,7 +408,7 @@ impl Parser {
         let ident = if let Token::Ident(ident) = ident { ident } else { unreachable!("compiler bug consumed ident but got something else") };
 
         let mut expr = TypedExpr::new(Expr::InArray { name: ident, indices: exprs });
-        while self.matches(vec![TokenType::In]) {
+        while self.matches(&[TokenType::In]) {
             let ident = self.consume(TokenType::Ident, "Multidimensional array access must be followed by an array name. Eg: (1,2,3) in ARRAY_NAME");
             let ident = if let Token::Ident(ident) = ident { ident } else { unreachable!("compiler bug consumed ident but got something else") };
             expr = Expr::InArray { name: ident, indices: vec![expr.into()] }.into();
@@ -401,7 +432,7 @@ impl Parser {
     fn regex(&mut self) -> TypedExpr {
         // "a ~ /match/"
         let mut expr = self.compare();
-        while self.matches(vec![TokenType::MatchedBy, TokenType::NotMatchedBy]) {
+        while self.matches(&[TokenType::MatchedBy, TokenType::NotMatchedBy]) {
             expr = Expr::BinOp(
                 Box::new(expr),
                 if self.previous().unwrap().ttype() == TokenType::MatchedBy { BinOp::MatchedBy } else { BinOp::NotMatchedBy },
@@ -412,7 +443,7 @@ impl Parser {
 
     fn compare(&mut self) -> TypedExpr {
         let mut expr = self.string_concat();
-        while self.matches(vec![
+        while self.matches(&[
             TokenType::GreaterEq,
             TokenType::Greater,
             TokenType::Less,
@@ -473,7 +504,7 @@ impl Parser {
 
     fn plus_minus(&mut self) -> TypedExpr {
         let mut expr = self.term();
-        while self.matches(vec![TokenType::Plus, TokenType::Minus]) {
+        while self.matches(&[TokenType::Plus, TokenType::Minus]) {
             let op = match self.previous().unwrap() {
                 Token::MathOp(MathOp::Minus) => MathOp::Minus,
                 Token::MathOp(MathOp::Plus) => MathOp::Plus,
@@ -486,7 +517,7 @@ impl Parser {
 
     fn term(&mut self) -> TypedExpr {
         let mut expr = self.unary();
-        while self.matches(vec![TokenType::Star, TokenType::Slash, TokenType::Modulo]) {
+        while self.matches(&[TokenType::Star, TokenType::Slash, TokenType::Modulo]) {
             let op = match self.previous().unwrap() {
                 Token::MathOp(MathOp::Star) => MathOp::Star,
                 Token::MathOp(MathOp::Slash) => MathOp::Slash,
@@ -503,7 +534,7 @@ impl Parser {
             && self.peek_next().ttype() == TokenType::Minus)
             && !(self.peek().ttype() == TokenType::Plus
             && self.peek_next().ttype() == TokenType::Plus)
-            && self.matches(vec![TokenType::Minus, TokenType::Plus, TokenType::Bang])
+            && self.matches(&[TokenType::Minus, TokenType::Plus, TokenType::Bang])
         {
             let p = self.previous().unwrap().ttype();
             let rhs = self.unary();
@@ -522,7 +553,7 @@ impl Parser {
 
     fn exp(&mut self) -> TypedExpr {
         let mut expr = self.pre_op();
-        while self.matches(vec![TokenType::Exponent]) {
+        while self.matches(&[TokenType::Exponent]) {
             let op = MathOp::Exponent;
             expr = Expr::MathOp(Box::new(expr), op, Box::new(self.pre_op())).into()
         }
@@ -619,7 +650,7 @@ impl Parser {
 
     fn column(&mut self) -> TypedExpr {
         let mut num_cols: usize = 0;
-        while self.matches(vec![TokenType::Column]) {
+        while self.matches(&[TokenType::Column]) {
             num_cols += 1;
         }
         let mut expr = self.primary();
@@ -648,7 +679,7 @@ impl Parser {
             }
             Token::Ident(name) => {
                 self.consume(TokenType::Ident, "Expected to parse an ident here");
-                if self.matches(vec![TokenType::LeftBracket]) {
+                if self.matches(&[TokenType::LeftBracket]) {
                     self.array_index(name)
                 } else {
                     Expr::Variable(name).into()
@@ -668,7 +699,7 @@ impl Parser {
 
     fn array_index(&mut self, name: String) -> TypedExpr {
         let mut indices = vec![self.expression()];
-        while self.matches(vec![TokenType::Comma]) && self.peek().ttype() != TokenType::RightBracket {
+        while self.matches(&[TokenType::Comma]) && self.peek().ttype() != TokenType::RightBracket {
             indices.push(self.expression());
         }
         self.consume(TokenType::RightBracket, "Array indexing must end with a right bracket.");
@@ -721,7 +752,7 @@ macro_rules! binop {
 #[cfg(test)]
 macro_rules! sprogram {
     ($body:expr) => {
-        Program::new(vec![], vec![], vec![PatternAction::new_action_only($body)])
+        Program::new(vec![], vec![], vec![PatternAction::new_action_only($body)], vec![])
     };
 }
 
@@ -747,6 +778,7 @@ fn test_ast_number() {
                 MathOp::Plus,
                 bnum!(2.0)
             )))],
+            vec![],
         )
     );
 }
@@ -803,6 +835,7 @@ fn test_mathop_exponent() {
                 MathOp::Exponent,
                 bnum!(2.0)
             )))],
+            vec![],
         )
     );
 }
@@ -969,7 +1002,7 @@ fn test_paser_begin_end() {
         Some(texpr!(Expr::Variable("a".to_string()))),
         Stmt::Print(num!(5.0)),
     );
-    assert_eq!(actual, Program::new(begins, ends, vec![generic]));
+    assert_eq!(actual, Program::new(begins, ends, vec![generic], vec![]));
 }
 
 #[test]
@@ -985,6 +1018,7 @@ fn test_pattern_only() {
             vec![PatternAction::new_pattern_only(texpr!(Expr::Variable(
                 "test".to_string()
             )))],
+            vec![],
         )
     );
 }
@@ -1000,6 +1034,7 @@ fn test_print_no_semicolon() {
             vec![],
             vec![],
             vec![PatternAction::new_action_only(Stmt::Print(num!(1.0)))],
+            vec![],
         )
     );
 }
@@ -1015,7 +1050,7 @@ fn test_column() {
     let binop = texpr!(Expr::MathOp(btexpr!(col), MathOp::Plus, bnum!(2.0)));
 
     let pa = PatternAction::new(Some(binop), body);
-    assert_eq!(actual, Program::new(vec![], vec![], vec![pa]));
+    assert_eq!(actual, Program::new(vec![], vec![], vec![pa], vec![]));
 }
 
 #[test]
@@ -1029,7 +1064,7 @@ fn test_nested_column() {
     let col = Expr::Column(btexpr!(col));
 
     let pa = PatternAction::new(Some(texpr!(col)), body);
-    assert_eq!(actual, Program::new(vec![], vec![], vec![pa]));
+    assert_eq!(actual, Program::new(vec![], vec![], vec![pa], vec![]));
 }
 
 #[test]
@@ -1040,7 +1075,7 @@ fn test_while_l00p() {
     let body = Stmt::While(num!(123.0), Box::new(Stmt::Print(num!(1.0))));
     assert_eq!(
         actual,
-        Program::new(vec![], vec![], vec![PatternAction::new_action_only(body)])
+        Program::new(vec![], vec![], vec![PatternAction::new_action_only(body)], vec![])
     );
 }
 
@@ -1344,4 +1379,13 @@ fn test_printf_multi() {
     actual!(actual, "{ printf \"%s%s%s\", 1, 2, 3 }");
     let stmt = Stmt::Printf { fstring: Expr::String("%s%s%s".to_string()).into(), args: vec![num!(1.0), num!(2.0), num!(3.0)] }.into();
     assert_eq!(actual, sprogram!(stmt));
+}
+
+#[test]
+fn test_function() {
+    actual!(actual, "function abc(a,b,c) { print 1; } BEGIN { print 1 }");
+    let body = Stmt::Print(Expr::NumberF64(1.0).into());
+    let function = Function::new("abc".to_string(), vec!["a".to_string(), "b".to_string(), "c".to_string()], body);
+    let begin = Stmt::Print(Expr::NumberF64(1.0).into());
+    assert_eq!(actual, Program::new(vec![begin], vec![], vec![], vec![function]))
 }
