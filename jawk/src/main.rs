@@ -1,7 +1,6 @@
 use crate::args::AwkArgs;
 use crate::lexer::lex;
-use crate::parser::{parse, Expr};
-use crate::transformer::transform;
+use crate::parser::{Expr, parse};
 use crate::typing::analyze;
 
 mod args;
@@ -13,7 +12,6 @@ mod printable_error;
 mod runtime;
 #[allow(dead_code)]
 mod test;
-mod transformer;
 mod typing;
 
 fn main() {
@@ -31,12 +29,11 @@ fn main() {
     };
     // 1. Lex into token
     // 2. Parse into tree
-    // 3. Transform the program with its patterns and actions into a singular Stmt
-    // 4. Type checking pass
-    // 5. Run it
+    // 3. Type checking pass
+    // 4. Run it
 
     // 1,2,3
-    let mut ast = transform(parse(lex(&program).unwrap()));
+    let mut ast = parse(lex(&program).unwrap());
 
     // 4
     if let Err(err) = analyze(&mut ast) {
@@ -44,17 +41,17 @@ fn main() {
     }
 
     if args.debug {
-        println!("{:?}", ast);
-        println!("{}", ast);
+        println!("{:?}", ast.main.body);
+        println!("{}", ast.main.body);
     }
 
     // 5
     if args.debug {
-        if let Err(err) = codgen::compile_and_capture(ast, &args.files) {
+        if let Err(err) = codgen::compile_and_capture(ast.main.body, &args.files) {
             eprintln!("{}", err);
         }
     } else {
-        if let Err(err) = codgen::compile_and_run(ast, &args.files) {
+        if let Err(err) = codgen::compile_and_run(ast.main.body, &args.files) {
             eprintln!("{}", err);
         }
     }

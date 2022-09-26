@@ -178,9 +178,9 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 // write all the values into scratch space. Runtime will read from that pointer
                 for (idx, arg) in args.iter().enumerate() {
                     let compiled = self.compile_expr(arg)?;
-                    self.function.insn_store_relative(&self.var_arg_scratch, (idx * 24) as c_long, compiled.tag);
-                    self.function.insn_store_relative(&self.var_arg_scratch, (idx * 24 + 8) as c_long, compiled.float);
-                    self.function.insn_store_relative(&self.var_arg_scratch, (idx * 24 + 16) as c_long, compiled.pointer);
+                    self.function.insn_store_relative(&self.var_arg_scratch, (idx * 24) as c_long, &compiled.tag);
+                    self.function.insn_store_relative(&self.var_arg_scratch, (idx * 24 + 8) as c_long, &compiled.float);
+                    self.function.insn_store_relative(&self.var_arg_scratch, (idx * 24 + 16) as c_long, &compiled.pointer);
                 }
                 let nargs = self.function.create_int_constant(args.len() as c_int);
                 self.runtime.printf(&mut self.function, fstring_ptr, nargs, self.var_arg_scratch.clone());

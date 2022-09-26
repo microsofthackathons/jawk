@@ -1,14 +1,14 @@
-use crate::parser::{Stmt, TypedExpr};
+use std::collections::{HashMap, HashSet};
+use crate::parser::{Function, PatternAction, Stmt, TypedExpr};
 use crate::{parser, Expr};
+use crate::lexer::Token::Print;
+use crate::printable_error::PrintableError;
 
 // Turn a program into just a single Stmt
-// Also convert any concatenations
-//  like a = a b into  a c= b (an append Expr aka concat equals)
-pub fn transform(program: parser::Program) -> Stmt {
-    let mut prog = program.begins;
-
+pub fn transform(begins: Vec<Stmt>, ends: Vec<Stmt>, pas: Vec<PatternAction>) -> Stmt {
+    let mut prog = begins;
     let mut every_line_stms = vec![];
-    for pattern in program.pattern_actions {
+    for pattern in pas {
         let stmt = if let Some(test) = pattern.pattern {
             Stmt::If(test, Box::new(pattern.action), None)
         } else {
@@ -24,8 +24,14 @@ pub fn transform(program: parser::Program) -> Stmt {
         prog.push(line_loop);
     }
 
-    for end in program.ends {
+    for end in ends {
         prog.push(end);
     }
     Stmt::Group(prog)
+}
+
+
+struct FunctionTransformer {
+    args: Vec<String>,
+    name: String,
 }

@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use crate::codgen::variable_extract;
-use crate::parser::{ScalarType, Stmt, TypedExpr};
+use crate::parser::{Arg, Function, Program, ScalarType, Stmt, TypedExpr};
 use crate::Expr;
 use immutable_chunkmap::map::Map;
 use crate::printable_error::PrintableError;
@@ -24,85 +24,89 @@ impl Into<VarType> for ScalarType {
 }
 pub type MapT = Map<String, ScalarType, 1000>;
 
-pub fn analyze(stmt: &mut Stmt) -> Result<(), PrintableError>{
+pub fn analyze(stmt: &mut Program) -> Result<(), PrintableError>{
     let mut map = MapT::new();
-    TypeAnalysis { scalars: map, arrays: HashSet::default() }.analyze_stmt(stmt)
+    TypeAnalysis { global_scalars: map, global_arrays: HashSet::default() }.analyze_program(stmt)
 }
 
 struct TypeAnalysis {
-    scalars: MapT,
-    arrays: HashSet<String>,
+    global_scalars: MapT,
+    global_arrays: HashSet<String>,
 }
 
 impl TypeAnalysis {
+    fn analyze_program(&mut self, prog: &mut Program) -> Result<(), PrintableError> {
+        self.analyze_stmt(&mut prog.main.body, &mut [])?;
+        Ok(())
+    }
+
     fn use_as_scalar(&mut self, var: &String, typ: ScalarType) -> Result<(), PrintableError> {
-        if self.arrays.contains(var) {
+        if self.global_arrays.contains(var) {
             return Err(PrintableError::new(format!("fatal: attempt to use array `{}` in a scalar context", var)))
         }
-        self.scalars = self.scalars.insert(var.clone(), typ).0;
+        self.global_scalars = self.global_scalars.insert(var.clone(), typ).0;
         Ok(())
     }
     fn use_as_array(&mut self, var: &String) -> Result<(), PrintableError> {
-        if let Some(typ) = self.scalars.get(var) {
+        if let Some(typ) = self.global_scalars.get(var) {
             return Err(PrintableError::new(format!("fatal: attempt to scalar `{}` in an array context", var)))
         }
-        self.arrays.insert(var.clone());
+        self.global_arrays.insert(var.clone());
         Ok(())
     }
 
-    fn analyze_stmt(&mut self, stmt: &mut Stmt) -> Result<(), PrintableError>{
+    fn analyze_stmt(&mut self, stmt: &mut Stmt, args: &mut [Arg]) -> Result<(), PrintableError>{
         match stmt {
-            Stmt::Printf {args, fstring} => {
-                for arg in args {
-                    self.analyze_expr(arg)?;
+            Stmt::Printf {args: printf_args, fstring} => {
+                for arg in printf_args {
+                    self.analyze_expr(arg, args)?;
                 }
             }
             Stmt::Break => {},
-            Stmt::Expr(expr) => self.analyze_expr(expr)?,
-            Stmt::Print(expr) => self.analyze_expr(expr)?,
+            Stmt::Expr(expr) => self.analyze_expr(expr, args)?,
+            Stmt::Print(expr) => self.analyze_expr(expr, args)?,
             Stmt::Group(grouping) => {
                 for stmt in grouping {
-                    self.analyze_stmt(stmt)?;
+                    self.analyze_stmt(stmt, args)?;
                 }
             }
             Stmt::If(test, if_so, if_not) => {
-                self.analyze_expr(test);
-                let mut if_so_map = self.scalars.clone();
-                let mut if_not_map = self.scalars.clone();
-                std::mem::swap(&mut if_so_map, &mut self.scalars);
+                self.analyze_expr(test, args)?;
+                let mut if_so_map = self.global_scalars.clone();
+                let mut if_not_map = self.global_scalars.clone();
+                std::mem::swap(&mut if_so_map, &mut self.global_scalars);
 
-                self.analyze_stmt(if_so)?;
-                std::mem::swap(&mut if_so_map, &mut self.scalars);
-                std::mem::swap(&mut if_not_map, &mut self.scalars);
+                self.analyze_stmt(if_so, args)?;
+                std::mem::swap(&mut if_so_map, &mut self.global_scalars);
+                std::mem::swap(&mut if_not_map, &mut self.global_scalars);
                 if let Some(else_case) = if_not {
-                    self.analyze_stmt(else_case)?
+                    self.analyze_stmt(else_case, args)?
                 }
-                std::mem::swap(&mut if_not_map, &mut self.scalars);
-                self.scalars = TypeAnalysis::merge_maps(&[&if_so_map, &if_not_map]);
+                std::mem::swap(&mut if_not_map, &mut self.global_scalars);
+                self.global_scalars = TypeAnalysis::merge_maps(&[&if_so_map, &if_not_map]);
             }
             Stmt::While(test, body) => {
-                self.analyze_expr(test)?;
+                self.analyze_expr(test, args)?;
 
-                let after_test_map = self.scalars.clone();
+                let after_test_map = self.global_scalars.clone();
 
-                self.analyze_stmt(body)?;
+                self.analyze_stmt(body, args)?;
 
-                let after_body_map = self.scalars.clone();
+                let after_body_map = self.global_scalars.clone();
 
-                self.scalars = TypeAnalysis::merge_maps(&[&after_test_map, &after_body_map]);
+                self.global_scalars = TypeAnalysis::merge_maps(&[&after_test_map, &after_body_map]);
 
-                self.analyze_expr(test);
+                self.analyze_expr(test, args)?;
 
-                let after_test_map = self.scalars.clone();
-                self.analyze_stmt(body)?;
-                let after_body_map = self.scalars.clone();
-                self.scalars = TypeAnalysis::merge_maps(&[&after_test_map, &after_body_map]);
+                let after_test_map = self.global_scalars.clone();
+                self.analyze_stmt(body, args)?;
+                let after_body_map = self.global_scalars.clone();
+                self.global_scalars = TypeAnalysis::merge_maps(&[&after_test_map, &after_body_map]);
             }
         }
         Ok(())
     }
-
-    fn analyze_expr(&mut self, expr: &mut TypedExpr) -> Result<(), PrintableError> {
+    fn analyze_expr(&mut self, expr: &mut TypedExpr, args: &mut[Arg]) -> Result<(), PrintableError> {
         match &mut expr.expr {
             Expr::NumberF64(_) => {
                 expr.typ = ScalarType::Float;
@@ -111,22 +115,22 @@ impl TypeAnalysis {
                 expr.typ = ScalarType::String;
             }
             Expr::BinOp(left, _op, right) => {
-                self.analyze_expr(left)?;
-                self.analyze_expr(right)?;
+                self.analyze_expr(left, args)?;
+                self.analyze_expr(right, args)?;
                 expr.typ = ScalarType::Float;
             }
             Expr::MathOp(left, _op, right) => {
-                self.analyze_expr(left)?;
-                self.analyze_expr(right)?;
+                self.analyze_expr(left, args)?;
+                self.analyze_expr(right, args)?;
                 expr.typ = ScalarType::Float;
             }
             Expr::LogicalOp(left, _op, right) => {
-                self.analyze_expr(left)?;
-                self.analyze_expr(right)?;
+                self.analyze_expr(left, args)?;
+                self.analyze_expr(right, args)?;
                 expr.typ = ScalarType::Float;
             }
             Expr::ScalarAssign(var, value) => {
-                self.analyze_expr(value)?;
+                self.analyze_expr(value, args)?;
                 self.use_as_scalar(var, value.typ)?;
                 expr.typ = value.typ;
             }
@@ -134,21 +138,21 @@ impl TypeAnalysis {
                 expr.typ = ScalarType::String;
             }
             Expr::Ternary(cond, expr1, expr2) => {
-                self.analyze_expr(cond)?;
-                let mut if_so_map = self.scalars.clone();
-                let mut if_not_map = self.scalars.clone();
-                std::mem::swap(&mut if_so_map, &mut self.scalars);
+                self.analyze_expr(cond, args)?;
+                let mut if_so_map = self.global_scalars.clone();
+                let mut if_not_map = self.global_scalars.clone();
+                std::mem::swap(&mut if_so_map, &mut self.global_scalars);
 
-                self.analyze_expr(expr1)?;
-                std::mem::swap(&mut if_so_map, &mut self.scalars);
-                std::mem::swap(&mut if_not_map, &mut self.scalars);
-                self.analyze_expr(expr2)?;
-                std::mem::swap(&mut if_not_map, &mut self.scalars);
-                self.scalars = TypeAnalysis::merge_maps(&[&if_so_map, &if_not_map]);
+                self.analyze_expr(expr1, args)?;
+                std::mem::swap(&mut if_so_map, &mut self.global_scalars);
+                std::mem::swap(&mut if_not_map, &mut self.global_scalars);
+                self.analyze_expr(expr2, args)?;
+                std::mem::swap(&mut if_not_map, &mut self.global_scalars);
+                self.global_scalars = TypeAnalysis::merge_maps(&[&if_so_map, &if_not_map]);
                 expr.typ = Self::merge_types(&expr1.typ, &expr2.typ);
             }
             Expr::Variable(var) => {
-                if let Some(typ) = self.scalars.get(var) {
+                if let Some(typ) = self.global_scalars.get(var) {
                     expr.typ = *typ;
                 } else {
                     expr.typ = ScalarType::String;
@@ -157,33 +161,33 @@ impl TypeAnalysis {
             }
             Expr::Column(col) => {
                 expr.typ = ScalarType::String;
-                self.analyze_expr(col)?;
+                self.analyze_expr(col, args)?;
             }
             Expr::Call => expr.typ = ScalarType::Float,
             Expr::Concatenation(vals) => {
                 expr.typ = ScalarType::String;
                 for val in vals {
-                    self.analyze_expr(val)?;
+                    self.analyze_expr(val, args)?;
                 }
             }
             Expr::ArrayIndex { indices, name } => {
                 self.use_as_array(name)?;
                 for idx in indices {
-                    self.analyze_expr(idx)?;
+                    self.analyze_expr(idx, args)?;
                 }
             }
             Expr::InArray { indices, name } => {
                 self.use_as_array(name)?;
                 for idx in indices {
-                    self.analyze_expr(idx)?;
+                    self.analyze_expr(idx, args)?;
                 }
             }
             Expr::ArrayAssign { indices, name, value } => {
                 self.use_as_array(name)?;
                 for idx in indices {
-                    self.analyze_expr(idx)?;
+                    self.analyze_expr(idx, args)?;
                 }
-                self.analyze_expr(value)?;
+                self.analyze_expr(value, args)?;
             }
         };
         Ok(())
@@ -225,14 +229,14 @@ fn test_it(program: &str, expected: &str) {
             .replace(";", "")
     }
 
-    use crate::{lex, parse, transform};
-    let mut ast = transform(parse(lex(program).unwrap()));
-    analyze(&mut ast);
-    println!("prog: {:?}", ast);
-    let result_clean = strip(&format!("{}", ast));
+    use crate::{lex, parse};
+    let mut ast = parse(lex(program).unwrap());
+    analyze(&mut ast).unwrap();
+    println!("prog: {:?}", ast.main);
+    let result_clean = strip(&format!("{}", ast.main.body));
     let expected_clean = strip(expected);
     if result_clean != expected_clean {
-        println!("Got: \n{}", format!("{}", ast));
+        println!("Got: \n{}", format!("{}", ast.main.body));
         println!("Expected: \n{}", expected);
     }
     assert_eq!(result_clean, expected_clean);
@@ -356,24 +360,24 @@ fn test_ternary_4() {
 
 #[test]
 fn test_fails() {
-    use crate::{lex, parse, transform};
-    let mut ast = transform(parse(lex("BEGIN { a = 0; a[0] = 1; }").unwrap()));
+    use crate::{lex, parse};
+    let mut ast = parse(lex("BEGIN { a = 0; a[0] = 1; }").unwrap());
     let res = analyze(&mut ast);
     assert!(res.is_err());
 }
 
 #[test]
 fn test_fails_2() {
-    use crate::{lex, parse, transform};
-    let mut ast = transform(parse(lex("BEGIN { a[0] = 1; a = 0;  }").unwrap()));
+    use crate::{lex, parse};
+    let mut ast = parse(lex("BEGIN { a[0] = 1; a = 0;  }").unwrap());
     let res = analyze(&mut ast);
     assert!(res.is_err());
 }
 
 #[test]
 fn test_fails_3() {
-    use crate::{lex, parse, transform};
-    let mut ast = transform(parse(lex("BEGIN { if(x) { a[0] = 1; } a = 0;  }").unwrap()));
+    use crate::{lex, parse};
+    let mut ast = parse(lex("BEGIN { if(x) { a[0] = 1; } a = 0;  }").unwrap());
     let res = analyze(&mut ast);
     assert!(res.is_err());
 }
