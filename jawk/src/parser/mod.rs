@@ -1,6 +1,7 @@
 mod types;
 mod transformer;
 
+use std::fmt::{Display, Formatter, write};
 use crate::lexer::{BinOp, LogicalOp, MathOp, Token, TokenType};
 pub use crate::parser::types::PatternAction;
 pub use types::{Expr, Function, ScalarType, Stmt, TypedExpr, Arg, ArgT};
@@ -19,6 +20,15 @@ enum PAType {
 pub struct Program {
     pub functions: Vec<Function>,
     pub main: Function,
+}
+
+impl Display for Program {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        for func in &self.functions {
+            write!(f, "{}\n", func)?;
+        }
+        write!(f, "{}", self.main.body)
+    }
 }
 
 pub fn parse(tokens: Vec<Token>) -> Program {

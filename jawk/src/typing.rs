@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use crate::codgen::variable_extract;
-use crate::parser::{Arg, Function, Program, ScalarType, Stmt, TypedExpr};
+use crate::parser::{Arg, ArgT, Function, Program, ScalarType, Stmt, TypedExpr};
 use crate::Expr;
 use immutable_chunkmap::map::Map;
 use crate::printable_error::PrintableError;
@@ -10,7 +10,7 @@ enum VarType {
     Float,
     String,
     Array,
-    Variable
+    Variable,
 }
 
 impl Into<VarType> for ScalarType {
@@ -22,9 +22,10 @@ impl Into<VarType> for ScalarType {
         }
     }
 }
+
 pub type MapT = Map<String, ScalarType, 1000>;
 
-pub fn analyze(stmt: &mut Program) -> Result<(), PrintableError>{
+pub fn analyze(stmt: &mut Program) -> Result<(), PrintableError> {
     let mut map = MapT::new();
     TypeAnalysis { global_scalars: map, global_arrays: HashSet::default() }.analyze_program(stmt)
 }
@@ -34,35 +35,63 @@ struct TypeAnalysis {
     global_arrays: HashSet<String>,
 }
 
+fn get_arg<'a>(args: &'a mut [Arg], name: &str) -> Option<&'a mut Arg> {
+    if let Some(arg) = args.iter_mut().find(|a| a.name == name) {
+        Some(arg)
+    } else {
+        None
+    }
+}
+
 impl TypeAnalysis {
     fn analyze_program(&mut self, prog: &mut Program) -> Result<(), PrintableError> {
         self.analyze_stmt(&mut prog.main.body, &mut [])?;
+        for func in &mut prog.functions {
+            self.analyze_stmt(&mut func.body, &mut func.args)?;
+        }
         Ok(())
     }
-
-    fn use_as_scalar(&mut self, var: &String, typ: ScalarType) -> Result<(), PrintableError> {
+    fn use_as_scalar(&mut self, var: &str, typ: ScalarType, args: &mut [Arg]) -> Result<(), PrintableError> {
+        if let Some(arg) = get_arg(args, var) {
+            match arg.typ {
+                ArgT::Unused => arg.typ = { ArgT::Scalar },
+                ArgT::Scalar => {} // scalar arg used as scalar, lgtm
+                ArgT::Array => return Err(PrintableError::new(format!("fatal: attempt to use array `{}` in a scalar context", var)))
+            }
+            return Ok(())
+        }
         if self.global_arrays.contains(var) {
-            return Err(PrintableError::new(format!("fatal: attempt to use array `{}` in a scalar context", var)))
+            return Err(PrintableError::new(format!("fatal: attempt to use array `{}` in a scalar context", var)));
         }
-        self.global_scalars = self.global_scalars.insert(var.clone(), typ).0;
+        self.global_scalars = self.global_scalars.insert(var.to_string(), typ).0;
         Ok(())
     }
-    fn use_as_array(&mut self, var: &String) -> Result<(), PrintableError> {
-        if let Some(typ) = self.global_scalars.get(var) {
-            return Err(PrintableError::new(format!("fatal: attempt to scalar `{}` in an array context", var)))
+    fn use_as_array(&mut self, var: &str, args: &mut [Arg]) -> Result<(), PrintableError> {
+        if let Some(arg) = get_arg(args, var) {
+            match arg.typ {
+                ArgT::Unused => arg.typ = { ArgT::Array },
+                ArgT::Scalar => return Err(PrintableError::new(format!("fatal: attempt to use scalar `{}` in a array context", var))),
+                ArgT::Array => {},
+            }
+            return Ok(())
         }
-        self.global_arrays.insert(var.clone());
+
+        if let Some(_type) = self.global_scalars.get(var) {
+            return Err(PrintableError::new(format!("fatal: attempt to scalar `{}` in an array context", var)));
+        }
+        self.global_arrays.insert(var.to_string());
         Ok(())
     }
 
-    fn analyze_stmt(&mut self, stmt: &mut Stmt, args: &mut [Arg]) -> Result<(), PrintableError>{
+    fn analyze_stmt(&mut self, stmt: &mut Stmt, args: &mut [Arg]) -> Result<(), PrintableError> {
         match stmt {
-            Stmt::Printf {args: printf_args, fstring} => {
+            Stmt::Printf { args: printf_args, fstring } => {
                 for arg in printf_args {
                     self.analyze_expr(arg, args)?;
                 }
+                self.analyze_expr(fstring, args)?;
             }
-            Stmt::Break => {},
+            Stmt::Break => {}
             Stmt::Expr(expr) => self.analyze_expr(expr, args)?,
             Stmt::Print(expr) => self.analyze_expr(expr, args)?,
             Stmt::Group(grouping) => {
@@ -106,7 +135,7 @@ impl TypeAnalysis {
         }
         Ok(())
     }
-    fn analyze_expr(&mut self, expr: &mut TypedExpr, args: &mut[Arg]) -> Result<(), PrintableError> {
+    fn analyze_expr(&mut self, expr: &mut TypedExpr, args: &mut [Arg]) -> Result<(), PrintableError> {
         match &mut expr.expr {
             Expr::NumberF64(_) => {
                 expr.typ = ScalarType::Float;
@@ -131,7 +160,7 @@ impl TypeAnalysis {
             }
             Expr::ScalarAssign(var, value) => {
                 self.analyze_expr(value, args)?;
-                self.use_as_scalar(var, value.typ)?;
+                self.use_as_scalar(var, value.typ, args)?;
                 expr.typ = value.typ;
             }
             Expr::Regex(_) => {
@@ -156,7 +185,7 @@ impl TypeAnalysis {
                     expr.typ = *typ;
                 } else {
                     expr.typ = ScalarType::String;
-                    self.use_as_scalar(var, ScalarType::Variable)?;
+                    self.use_as_scalar(var, ScalarType::Variable, args)?;
                 }
             }
             Expr::Column(col) => {
@@ -171,19 +200,19 @@ impl TypeAnalysis {
                 }
             }
             Expr::ArrayIndex { indices, name } => {
-                self.use_as_array(name)?;
+                self.use_as_array(name, args)?;
                 for idx in indices {
                     self.analyze_expr(idx, args)?;
                 }
             }
             Expr::InArray { indices, name } => {
-                self.use_as_array(name)?;
+                self.use_as_array(name, args)?;
                 for idx in indices {
                     self.analyze_expr(idx, args)?;
                 }
             }
             Expr::ArrayAssign { indices, name, value } => {
-                self.use_as_array(name)?;
+                self.use_as_array(name, args)?;
                 for idx in indices {
                     self.analyze_expr(idx, args)?;
                 }
@@ -233,10 +262,10 @@ fn test_it(program: &str, expected: &str) {
     let mut ast = parse(lex(program).unwrap());
     analyze(&mut ast).unwrap();
     println!("prog: {:?}", ast.main);
-    let result_clean = strip(&format!("{}", ast.main.body));
+    let result_clean = strip(&format!("{}", ast));
     let expected_clean = strip(expected);
     if result_clean != expected_clean {
-        println!("Got: \n{}", format!("{}", ast.main.body));
+        println!("Got: \n{}", format!("{}", ast));
         println!("Expected: \n{}", expected);
     }
     assert_eq!(result_clean, expected_clean);

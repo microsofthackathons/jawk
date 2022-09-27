@@ -173,16 +173,33 @@ impl Display for Expr {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum ArgT {
+    Unused,
     Scalar,
     Array,
+}
+
+impl Display for ArgT {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ArgT::Unused => write!(f, "u"),
+            ArgT::Scalar => write!(f, "s"),
+            ArgT::Array => write!(f, "a"),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Arg {
     pub name: String,
     pub typ: ArgT,
+}
+
+impl Display for Arg {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({} {})", self.typ, self.name)
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -196,8 +213,21 @@ impl Function {
     pub fn new(name: String, args: Vec<String>, body: Stmt) -> Self {
         Function {
             name,
-            args: args.into_iter().map(|arg| Arg { name: arg, typ: ArgT::Scalar }).collect(),
+            args: args.into_iter().map(|arg| Arg { name: arg, typ: ArgT::Unused }).collect(),
             body,
         }
+    }
+}
+
+impl Display for Function {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "function {}(", self.name)?;
+        for (idx, arg) in self.args.iter().enumerate() {
+            write!(f, "{}", arg)?;
+            if idx != self.args.len() - 1 {
+                write!(f, ", ")?;
+            }
+        }
+        write!(f, ") {{\n{}\n}}", self.body)
     }
 }
