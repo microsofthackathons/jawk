@@ -153,7 +153,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
         let vars = self.define_all_vars(&prog)?;
 
         // Compile program
-        self.compile_stmt(&prog);
+        self.compile_stmt(&prog)?;
 
         // This is just so # strings allocated == # of strings freed which makes testing easier
         for var in vars {
@@ -172,6 +172,9 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
 
     fn compile_stmt(&mut self, stmt: &Stmt) -> Result<(), PrintableError> {
         match stmt {
+            Stmt::Return(ret) => {
+                todo!("return")
+            }
             Stmt::Printf { args, fstring } => {
                 let fstring_val = self.compile_expr(fstring)?;
                 let fstring_ptr = self.to_string(&fstring_val, fstring.typ);
@@ -263,6 +266,9 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
     // When compile_expr returns a string the caller is responsible for freeing it
     fn compile_expr(&mut self, expr: &TypedExpr) -> Result<ValueT, PrintableError> {
         Ok(match &expr.expr {
+            Expr::Call{target, args} => {
+                todo!("func call")
+            }
             Expr::ScalarAssign(var, value) => {
                 // BEGIN: Optimization
                 // Optimization to allow reusing the string being assigned to by a string concat operation
@@ -471,7 +477,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 self.drop_if_str(&column, col.typ);
                 ValueT::new(tag, self.function.create_float64_constant(0.0), val)
             }
-            Expr::Call => {
+            Expr::NextLine => {
                 // Ask runtime if there is a next line. Returns a float 0 or 1
                 let one = self.float_tag();
                 let next_line_exists = self.runtime.call_next_line(&mut self.function);

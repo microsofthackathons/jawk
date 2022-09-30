@@ -22,7 +22,6 @@ pub fn extract(prog: &Stmt) -> ExtractResults {
 }
 
 impl Extractor {
-
     fn add_array(&mut self, name: String) {
         if !self.results.arrays.contains_key(&name) {
             self.results.arrays.insert(name, self.results.arrays.len() as i32);
@@ -30,13 +29,18 @@ impl Extractor {
     }
     fn extract_stmt(&mut self, stmt: &Stmt) {
         match stmt {
-            Stmt::Printf{fstring, args} => {
+            Stmt::Return(expr) => {
+                if let Some(expr) = expr {
+                    self.extract_expr(expr)
+                }
+            }
+            Stmt::Printf { fstring, args } => {
                 for arg in args {
                     self.extract_expr(arg)
                 }
                 self.extract_expr(fstring);
             }
-            Stmt::Break => {},
+            Stmt::Break => {}
             Stmt::Expr(expr) => self.extract_expr(expr),
             Stmt::Print(expr) => self.extract_expr(expr),
             Stmt::Group(group) => {
@@ -60,6 +64,11 @@ impl Extractor {
 
     fn extract_expr(&mut self, expr: &TypedExpr) {
         match &expr.expr {
+            Expr::Call { target: _target, args } => {
+                for arg in args {
+                    self.extract_expr(arg);
+                }
+            }
             Expr::Variable(var) => {
                 self.results.vars.insert(var.clone());
             }
@@ -83,7 +92,7 @@ impl Extractor {
                 self.extract_expr(right);
             }
             Expr::Column(col) => self.extract_expr(col),
-            Expr::Call => {}
+            Expr::NextLine => {}
             Expr::ScalarAssign(var, value) => {
                 self.results.vars.insert(var.clone());
                 self.extract_expr(value);

@@ -14,6 +14,7 @@ use crate::codgen::{CodeGen, ValuePtrT, ValueT, variable_extract};
 fn float_to_string<RuntimeT: Runtime>(func: &mut Function, runtime: &mut RuntimeT, value: &ValueT) -> Value {
     runtime.number_to_string(func, value.float.clone())
 }
+
 fn string_to_string<RuntimeT: Runtime>(_func: &mut Function, _runtime: &mut RuntimeT, value: &ValueT) -> Value {
     value.pointer.clone()
 }
@@ -22,6 +23,7 @@ fn truthy_float<RuntimeT: Runtime>(function: &mut Function, _runtime: &mut Runti
     let zero_f = function.create_float64_constant(0.0);
     function.insn_ne(&value.float, &zero_f)
 }
+
 fn truthy_string<RuntimeT: Runtime>(function: &mut Function, _runtime: &mut RuntimeT, value: &ValueT) -> Value {
     let string_len_offset =
         std::mem::size_of::<usize>() + std::mem::size_of::<*const u8>();
@@ -76,41 +78,36 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
         self.function.insn_load(&temp_storage)
     }
 
+    pub fn new_stack_value(&mut self) -> ValuePtrT {
+        ValuePtrT::new(
+            self.function.create_value_int(),
+            self.function.create_value_float64(),
+            self.function.create_value_void_ptr())
+    }
+
     pub fn define_all_vars(&mut self, prog: &Stmt) -> Result<HashSet<String>, PrintableError> {
         // All variables are init'ed to the empty string.
         let extractor_results = variable_extract::extract(prog);
         for var in &extractor_results.vars {
-            let tag = self.function.create_value_int();
-            self.function.insn_store(&tag, &self.string_tag);
+            let stack_value = self.new_stack_value();
+            let init_value = ValueT::new(self.string_tag.clone(), self.zero_f.clone(), self.runtime.empty_string(&mut self.function));
 
-            let ptr_value = self.function.create_value_void_ptr();
-            let ptr = self.runtime.empty_string(&mut self.function);
-            self.function.insn_store(&ptr_value, &ptr);
-
-            let float_value = self.function.create_value_float64();
-            self.function.insn_store(&float_value, &self.zero_f);
-
-            let val = ValueT::new(tag, float_value, ptr);
-            self.scopes.insert_scalar(var.clone(), val)?;
+            self.store(&stack_value, &init_value);
+            self.scopes.insert_scalar(var.clone(), stack_value)?;
         }
 
         // All string constants like a in `print "a"`; are stored in a variable
         // the name of the variable is " a". Just a space in front to prevent collisions.
         for str_const in extractor_results.str_consts {
+            let stack_value = self.new_stack_value();
             let space_in_front = format!(" {}", str_const);
-            let tag = self.function.create_value_int();
-            self.function.insn_store(&tag, &self.string_tag);
 
             let ptr = Rc::into_raw(Rc::new(str_const)) as *mut c_void;
             let ptr = self.function.create_void_ptr_constant(ptr);
-            let ptr_value = self.function.create_value_void_ptr();
-            self.function.insn_store(&ptr_value, &ptr);
+            let defaults = ValueT::new(self.string_tag.clone(), self.zero_f.clone(), ptr);
 
-            let float_value = self.function.create_value_float64();
-            self.function.insn_store(&float_value, &self.zero_f);
-
-            let val = ValueT::new(tag, float_value, ptr);
-            self.scopes.insert_scalar(space_in_front, val)?;
+            self.store(&stack_value, &defaults);
+            self.scopes.insert_scalar(space_in_front, stack_value)?;
         }
 
         self.runtime.allocate_arrays(extractor_results.arrays.len());

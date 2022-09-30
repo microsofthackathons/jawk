@@ -56,13 +56,13 @@ impl Parser {
                     if self.peek().ttype() != TokenType::RightParen {
                         args.push(self.ident_consume("Expected function argument name here"));
                     } else {
-                        break
+                        break;
                     }
                     if self.peek().ttype() != TokenType::RightParen {
                         self.consume(TokenType::Comma, "Expected comma after function argument and before right paren");
-                        continue
+                        continue;
                     }
-                    break
+                    break;
                 }
                 self.consume(TokenType::RightParen, "Expected right paren after function arguments");
                 let body = self.group();
@@ -213,6 +213,13 @@ impl Parser {
     fn stmt(&mut self) -> Stmt {
         let stmt = if self.matches(&[TokenType::Print]) {
             Stmt::Print(self.expression()) // TODO: print 1,2,3
+        } else if self.matches(&[TokenType::Ret]) {
+            if self.peek().ttype() != TokenType::RightBrace && self.peek_next().ttype() != TokenType::Semicolon {
+                let expr = self.expression();
+                Stmt::Return(Some(expr))
+            } else {
+                Stmt::Return(None)
+            }
         } else if self.matches(&[TokenType::Printf]) {
             let fstring = self.expression();
             let mut args = vec![];

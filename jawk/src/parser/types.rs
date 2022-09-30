@@ -10,6 +10,18 @@ pub enum ScalarType {
     Variable,
 }
 
+#[derive(PartialEq, Clone, Copy, Debug)]
+pub enum AwkT {
+    Scalar(ScalarType),
+    Array,
+}
+
+impl Into<AwkT> for ScalarType {
+    fn into(self) -> AwkT {
+        AwkT::Scalar(self)
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Stmt {
     Expr(TypedExpr),
@@ -19,11 +31,18 @@ pub enum Stmt {
     While(TypedExpr, Box<Stmt>),
     Printf { fstring: TypedExpr, args: Vec<TypedExpr> },
     Break,
+    Return(Option<TypedExpr>),
 }
 
 impl Display for Stmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            Stmt::Return(ret) => {
+                write!(f, "return")?;
+                if let Some(ret) = ret {
+                    write!(f, " {}", ret)?;
+                }
+            }
             Stmt::Printf { fstring, args } => {
                 write!(f, "printf \"{}\"", fstring)?;
                 for mem in args {
@@ -84,7 +103,7 @@ pub struct TypedExpr {
 impl TypedExpr {
     pub fn new(expr: Expr) -> TypedExpr {
         TypedExpr {
-            typ: ScalarType::Variable,
+            typ: ScalarType::Variable.into(),
             expr,
         }
     }
@@ -108,11 +127,12 @@ pub enum Expr {
     LogicalOp(Box<TypedExpr>, LogicalOp, Box<TypedExpr>),
     Variable(String),
     Column(Box<TypedExpr>),
-    Call,
+    NextLine,
     Ternary(Box<TypedExpr>, Box<TypedExpr>, Box<TypedExpr>),
     Regex(String),
     ArrayIndex { name: String, indices: Vec<TypedExpr> },
     InArray { name: String, indices: Vec<TypedExpr> },
+    Call { target: String, args: Vec<TypedExpr> },
 }
 
 impl Display for TypedExpr {
@@ -128,8 +148,15 @@ impl Display for TypedExpr {
 impl Display for Expr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            Expr::Call {target, args} => {
+                write!(f, "{}(", target)?;
+                for arg in args {
+                    write!(f, "{},", arg)?;
+                }
+                write!(f, ")")
+            }
             Expr::ScalarAssign(var, expr) => write!(f, "{} = {}", var, expr),
-            Expr::Call => write!(f, "check_if_there_is_another_line"),
+            Expr::NextLine => write!(f, "check_if_there_is_another_line"),
             Expr::Variable(n) => write!(f, "{}", n),
             Expr::String(str) => write!(f, "\"{}\"", str),
             Expr::NumberF64(n) => write!(f, "{}", n),
@@ -207,6 +234,7 @@ pub struct Function {
     pub name: String,
     pub args: Vec<Arg>,
     pub body: Stmt,
+    pub return_type: ArgT,
 }
 
 impl Function {
@@ -215,6 +243,7 @@ impl Function {
             name,
             args: args.into_iter().map(|arg| Arg { name: arg, typ: ArgT::Unused }).collect(),
             body,
+            return_type: ArgT::Unused,
         }
     }
 }

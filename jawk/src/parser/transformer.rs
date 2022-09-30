@@ -18,7 +18,7 @@ pub fn transform(begins: Vec<Stmt>, ends: Vec<Stmt>, pas: Vec<PatternAction>) ->
     }
     if every_line_stms.len() > 0 {
         let line_loop = Stmt::While(
-            TypedExpr::new(Expr::Call),
+            TypedExpr::new(Expr::NextLine),
             Box::new(Stmt::Group(every_line_stms)),
         );
         prog.push(line_loop);
