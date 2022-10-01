@@ -45,8 +45,11 @@ impl Display for Stmt {
             }
             Stmt::Printf { fstring, args } => {
                 write!(f, "printf \"{}\"", fstring)?;
-                for mem in args {
-                    write!(f, "{},", mem.expr)?;
+                for (idx, mem) in args.iter().enumerate() {
+                    write!(f, "{}", mem.expr)?;
+                    if idx + 1 != args.len() {
+                        write!(f, ", ")?;
+                    }
                 }
             }
             Stmt::Expr(expr) => write!(f, "{}", expr)?,
@@ -148,7 +151,7 @@ impl Display for TypedExpr {
 impl Display for Expr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Expr::Call {target, args} => {
+            Expr::Call { target, args } => {
                 write!(f, "{}(", target)?;
                 for arg in args {
                     write!(f, "{},", arg)?;
@@ -177,22 +180,34 @@ impl Display for Expr {
 
             Expr::ArrayIndex { name, indices } => {
                 write!(f, "{}[", name)?;
-                for idx in indices {
-                    write!(f, "{},", idx)?;
+                for (idx, idx_expr) in indices.iter().enumerate() {
+                    if idx != indices.len() - 1 {
+                        write!(f, "{},", idx)?;
+                    } else {
+                        write!(f, "{}", idx)?;
+                    }
                 }
                 write!(f, "]")
             }
             Expr::InArray { name, indices } => {
                 write!(f, "(")?;
-                for idx in indices {
-                    write!(f, "{},", idx)?;
+                for (idx_idx, idx_expr) in indices.iter().enumerate() {
+                    if idx_idx != indices.len() - 1 {
+                        write!(f, "{},", idx_expr)?;
+                    } else {
+                        write!(f, "{}", idx_expr)?;
+                    }
                 }
                 write!(f, ") in {}", name)
             }
             Expr::ArrayAssign { name, indices, value } => {
                 write!(f, "{}[", name)?;
-                for idx in indices {
-                    write!(f, "{},", idx)?;
+                for (idx_idx, idx_expr) in indices.iter().enumerate() {
+                    if idx_idx != indices.len() - 1 {
+                        write!(f, "{},", idx_expr)?;
+                    } else {
+                        write!(f, "{}", idx_expr)?;
+                    }
                 }
                 write!(f, "] = {}", value)
             }

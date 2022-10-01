@@ -228,7 +228,6 @@ impl TypeAnalysis {
                     expr.typ = ScalarType::String;
                     self.use_as_scalar(var, ScalarType::Variable, func_state)?;
                 }
-
             }
             Expr::Column(col) => {
                 expr.typ = ScalarType::String;
@@ -259,6 +258,7 @@ impl TypeAnalysis {
                     self.analyze_expr(idx, func_state, false)?;
                 }
                 self.analyze_expr(value, func_state, false)?;
+                expr.typ = value.typ;
             }
         };
         Ok(())
@@ -467,9 +467,21 @@ fn test_fails_3() {
 }
 
 #[test]
-fn test_typing_function() {
+fn test_typing_scalar_function() {
     test_it("function a() { return 1; } BEGIN { print 1; }",
             "function a() { return (f 1); } print (f 1);");
+}
+
+#[test]
+fn test_arr_typing() {
+    test_it("BEGIN { b[0] = d; }",
+            "(s b[(f 0)] = (s d))");
+}
+
+#[test]
+fn test_func_arg_typing() {
+    test_it("function a(b,c,d) { b[0] = 1; c[0] = 1; return d } BEGIN { }",
+            "function a((ab), (ac), (ud)) {     (f b[(f0)]=(f1)) (f c[(f0)]= (f1)) return(vd)  }");
 }
 
 #[test]
