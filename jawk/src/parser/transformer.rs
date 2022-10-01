@@ -4,6 +4,14 @@ use crate::{parser, Expr};
 use crate::lexer::Token::Print;
 use crate::printable_error::PrintableError;
 
+fn group_vec_of_stmt(mut stmts: Vec<Stmt>) -> Stmt {
+    if stmts.len() == 1 {
+        stmts.pop().unwrap()
+    } else {
+        Stmt::Group(stmts)
+    }
+}
+
 // Turn a program into just a single Stmt
 pub fn transform(begins: Vec<Stmt>, ends: Vec<Stmt>, pas: Vec<PatternAction>) -> Stmt {
     let mut prog = begins;
@@ -19,7 +27,7 @@ pub fn transform(begins: Vec<Stmt>, ends: Vec<Stmt>, pas: Vec<PatternAction>) ->
     if every_line_stms.len() > 0 {
         let line_loop = Stmt::While(
             TypedExpr::new(Expr::NextLine),
-            Box::new(Stmt::Group(every_line_stms)),
+            Box::new(group_vec_of_stmt(every_line_stms)),
         );
         prog.push(line_loop);
     }
@@ -27,7 +35,7 @@ pub fn transform(begins: Vec<Stmt>, ends: Vec<Stmt>, pas: Vec<PatternAction>) ->
     for end in ends {
         prog.push(end);
     }
-    Stmt::Group(prog)
+    group_vec_of_stmt(prog)
 }
 
 

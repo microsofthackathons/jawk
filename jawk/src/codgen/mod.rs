@@ -283,7 +283,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 // Now concat can re-use the original value since ref count is 1 it's safe to downgrade
                 // from Rc -> Box
 
-/*                if let Expr::Concatenation(vars) = &value.expr {
+                if let Expr::Concatenation(vars) = &value.expr {
                     let mut var_ptrs = self.scopes.get_scalar(var)?.clone();
                     let strings_to_concat = self.compile_exprs_to_string(vars)?;
                     let old_value = self.load(&mut var_ptrs);
@@ -292,11 +292,9 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                     self.store(&mut var_ptrs, &new_value);
                     return Ok(self.copy_if_string(new_value, ScalarType::Variable));
                 }
- */
                 let new_value = self.compile_expr(value)?;
                 let mut var_ptrs = self.scopes.get_scalar(var)?.clone();
                 let old_value = self.load(&mut var_ptrs);
-                // self.runtime.column(&mut self.function, old_value.tag.clone(), old_value.float.clone(), old_value.pointer.clone());
                 self.drop_if_str(&old_value, ScalarType::Variable);
                 self.store(&mut var_ptrs, &new_value);
                 self.copy_if_string(new_value, value.typ)
@@ -540,9 +538,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 let indices = self.concat_indices(&values);
                 let array_id = *self.array_map.get(name).unwrap();
                 let result_copy = self.copy_if_string(rhs.clone(), value.typ);
-                let float_result = self.runtime.array_assign(&mut self.function, array_id, indices,
-                                                             rhs.tag, rhs.float, rhs.pointer,
-                );
+                self.runtime.array_assign(&mut self.function, array_id, indices, rhs.tag, rhs.float, rhs.pointer);
                 result_copy
             }
         })

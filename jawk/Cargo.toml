@@ -14,3 +14,7 @@ lru-cache = "0.1.2"
 [[bin]]
 name = "jawk"
 path = "src/main.rs"
+
+[profile.release]
+lto = true
+codegen-units = 1
