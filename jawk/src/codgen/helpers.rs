@@ -89,24 +89,24 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
         // All variables are init'ed to the empty string.
         let extractor_results = variable_extract::extract(prog);
         for var in &extractor_results.vars {
-            let stack_value = self.new_stack_value();
+            let mut stack_value = self.new_stack_value();
             let init_value = ValueT::new(self.string_tag.clone(), self.zero_f.clone(), self.runtime.empty_string(&mut self.function));
 
-            self.store(&stack_value, &init_value);
+            self.store(&mut stack_value, &init_value);
             self.scopes.insert_scalar(var.clone(), stack_value)?;
         }
 
         // All string constants like a in `print "a"`; are stored in a variable
         // the name of the variable is " a". Just a space in front to prevent collisions.
         for str_const in extractor_results.str_consts {
-            let stack_value = self.new_stack_value();
+            let mut stack_value = self.new_stack_value();
             let space_in_front = format!(" {}", str_const);
 
             let ptr = Rc::into_raw(Rc::new(str_const)) as *mut c_void;
             let ptr = self.function.create_void_ptr_constant(ptr);
             let defaults = ValueT::new(self.string_tag.clone(), self.zero_f.clone(), ptr);
 
-            self.store(&stack_value, &defaults);
+            self.store(&mut stack_value, &defaults);
             self.scopes.insert_scalar(space_in_front, stack_value)?;
         }
 
@@ -120,7 +120,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
         self.function.insn_ne(&value, &zero_f)
     }
 
-    pub fn to_float(&mut self, value: &ValueT, typ: ScalarType) -> Value {
+    pub fn val_to_float(&mut self, value: &ValueT, typ: ScalarType) -> Value {
         if typ == ScalarType::Float {
             return value.float.clone();
         }
@@ -130,7 +130,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
         )
     }
 
-    pub fn to_string(&mut self, value: &ValueT, typ: ScalarType) -> Value {
+    pub fn val_to_string(&mut self, value: &ValueT, typ: ScalarType) -> Value {
         if typ == ScalarType::String {
             return value.pointer.clone();
         }
@@ -144,16 +144,17 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
     }
 
     // Free the value in the value pointer if it's a string
-    pub fn drop_if_string_ptr(&mut self, value: &ValuePtrT, typ: ScalarType) {
+    pub fn drop_if_string_ptr(&mut self, value: &mut ValuePtrT, typ: ScalarType) {
         if let ScalarType::Float = typ {
             return;
         }
-        let value = self.load(&value);
+        let value = self.load( value);
         self.drop_if_str(&value, typ)
     }
 
     // Free the value if it's a string
     pub fn drop_if_str(&mut self, value: &ValueT, typ: ScalarType) {
+        // self.runtime.column(&mut self.function, value.tag.clone(), value.float.clone(), value.pointer.clone());
         match typ {
             ScalarType::String => {
                 self.drop(&value.pointer);
@@ -236,7 +237,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
         let mut expressions = Vec::with_capacity(exprs.len());
         for expr in exprs {
             let val = self.compile_expr(expr)?;
-            let string = self.to_string(&val, expr.typ);
+            let string = self.val_to_string(&val, expr.typ);
             expressions.push(string)
         }
         Ok(expressions)
@@ -275,16 +276,22 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
         result
     }
 
-    pub fn load(&mut self, ptr: &ValuePtrT) -> ValueT {
-        let tag = self.function.insn_load(&ptr.tag);
-        let val = self.function.insn_load(&ptr.float);
-        let ptr = self.function.insn_load(&ptr.pointer);
+    pub fn load(&mut self, ptr: &mut ValuePtrT) -> ValueT {
+        let ptr_tag = self.function.address_of(&mut ptr.tag);
+        let ptr_float = self.function.address_of(&mut ptr.float);
+        let ptr_ptr = self.function.address_of(&mut ptr.pointer);
+        let tag = self.function.insn_load_relative(&ptr_tag, 0, &Context::sbyte_type());
+        let val = self.function.insn_load_relative(&ptr_float, 0, &Context::float64_type());
+        let ptr = self.function.insn_load_relative(&ptr_ptr, 0, &Context::void_ptr_type());
         ValueT::new(tag, val, ptr)
     }
 
-    pub fn store(&mut self, ptr: &ValuePtrT, value: &ValueT) {
-        self.function.insn_store(&ptr.tag, &value.tag);
-        self.function.insn_store(&ptr.float, &value.float);
-        self.function.insn_store(&ptr.pointer, &value.pointer);
+    pub fn store(&mut self, ptr: &mut ValuePtrT, value: &ValueT) {
+        let ptr_tag = self.function.address_of(&mut ptr.tag);
+        let ptr_float = self.function.address_of(&mut ptr.float);
+        let ptr_ptr = self.function.address_of(&mut ptr.pointer);
+        self.function.insn_store_relative(&ptr_tag, 0, &value.tag);
+        self.function.insn_store_relative(&ptr_float, 0, &value.float);
+        self.function.insn_store_relative(&ptr_ptr, 0, &value.pointer);
     }
 }

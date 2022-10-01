@@ -48,9 +48,12 @@ pub fn compile_and_run(prog: Stmt, files: &[String]) -> Result<(), PrintableErro
 // Entry point to run and debug/test a program. Use the test runtime.
 pub fn compile_and_capture(prog: Stmt, files: &[String]) -> Result<TestRuntime, PrintableError> {
     let mut test_runtime = TestRuntime::new(files.to_vec());
-    let mut codegen = CodeGen::new(&mut test_runtime);
-    codegen.compile(prog, true)?;
-    codegen.run();
+    {
+        let mut codegen = CodeGen::new(&mut test_runtime);
+        codegen.compile(prog, true)?;
+        codegen.run();
+    }
+    assert_eq!(test_runtime.strings_in(), test_runtime.strings_out(), "LEFT strings in does not match RIGHT strings out");
     Ok(test_runtime)
 }
 
@@ -157,8 +160,8 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
 
         // This is just so # strings allocated == # of strings freed which makes testing easier
         for var in vars {
-            let var_ptrs = self.scopes.get_scalar(&var)?.clone();
-            self.drop_if_string_ptr(&var_ptrs, ScalarType::Variable);
+            let mut var_ptrs = self.scopes.get_scalar(&var)?.clone();
+            self.drop_if_string_ptr(&mut var_ptrs, ScalarType::Variable);
         }
 
         self.function.insn_return(&zero);
@@ -177,7 +180,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
             }
             Stmt::Printf { args, fstring } => {
                 let fstring_val = self.compile_expr(fstring)?;
-                let fstring_ptr = self.to_string(&fstring_val, fstring.typ);
+                let fstring_ptr = self.val_to_string(&fstring_val, fstring.typ);
                 // write all the values into scratch space. Runtime will read from that pointer
                 for (idx, arg) in args.iter().enumerate() {
                     let compiled = self.compile_expr(arg)?;
@@ -211,7 +214,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                         self.runtime.print_float(&mut self.function, val.float);
                     }
                     ScalarType::Variable => {
-                        let str = self.to_string(&val, expr.typ);
+                        let str = self.val_to_string(&val, expr.typ);
                         self.runtime.print_string(&mut self.function, str.clone());
                         self.runtime.free_string(&mut self.function, str);
                     }
@@ -266,7 +269,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
     // When compile_expr returns a string the caller is responsible for freeing it
     fn compile_expr(&mut self, expr: &TypedExpr) -> Result<ValueT, PrintableError> {
         Ok(match &expr.expr {
-            Expr::Call{target, args} => {
+            Expr::Call { target, args } => {
                 todo!("func call")
             }
             Expr::ScalarAssign(var, value) => {
@@ -274,25 +277,28 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 // Optimization to allow reusing the string being assigned to by a string concat operation
                 // a = "init"
                 // a = a "abc" (We don't want to make a copy of a when we concat "abc" with it)
-                // We first calculate a to be init and "abc" to "abc". This results in a copy being made
+                // We first calculfate a to be init and "abc" to "abc". This results in a copy being made
                 // of "init" (increasing the reference count to 2). Then we drop a BEFORE actually doing the
                 // concat.  Reference count returns to 1.
                 // Now concat can re-use the original value since ref count is 1 it's safe to downgrade
                 // from Rc -> Box
-                if let Expr::Concatenation(vars) = &value.expr {
-                    let var_ptrs = self.scopes.get_scalar(var)?.clone();
+
+/*                if let Expr::Concatenation(vars) = &value.expr {
+                    let mut var_ptrs = self.scopes.get_scalar(var)?.clone();
                     let strings_to_concat = self.compile_exprs_to_string(vars)?;
-                    let old_value = self.load(&var_ptrs);
+                    let old_value = self.load(&mut var_ptrs);
                     self.drop_if_str(&old_value, ScalarType::Variable);
                     let new_value = self.concat_values(&strings_to_concat);
-                    self.store(&var_ptrs, &new_value);
+                    self.store(&mut var_ptrs, &new_value);
                     return Ok(self.copy_if_string(new_value, ScalarType::Variable));
                 }
+ */
                 let new_value = self.compile_expr(value)?;
-                let var_ptrs = self.scopes.get_scalar(var)?.clone();
-                let old_value = self.load(&var_ptrs);
+                let mut var_ptrs = self.scopes.get_scalar(var)?.clone();
+                let old_value = self.load(&mut var_ptrs);
+                // self.runtime.column(&mut self.function, old_value.tag.clone(), old_value.float.clone(), old_value.pointer.clone());
                 self.drop_if_str(&old_value, ScalarType::Variable);
-                self.store(&var_ptrs, &new_value);
+                self.store(&mut var_ptrs, &new_value);
                 self.copy_if_string(new_value, value.typ)
             }
             Expr::NumberF64(num) => ValueT::new(
@@ -304,8 +310,8 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 // Every string constant is stored in a variable with the name " name"
                 // the space ensures we don't collide with normal variable names;
                 let string_tag = self.string_tag();
-                let var_ptr = self.scopes.get_scalar(&format!(" {}", str))?.clone();
-                let var = self.load(&var_ptr);
+                let mut var_ptr = self.scopes.get_scalar(&format!(" {}", str))?.clone();
+                let var = self.load(&mut var_ptr);
                 let zero = self.function.create_float64_constant(0.0);
                 let new_ptr = self.runtime.copy_string(&mut self.function, var.pointer);
                 ValueT::new(string_tag, zero, new_ptr)
@@ -314,8 +320,8 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 // Every string constant is stored in a variable with the name " name"
                 // the space ensures we don't collide with normal variable names;
                 let string_tag = self.string_tag();
-                let var_ptr = self.scopes.get_scalar(&format!(" {}", str))?.clone();
-                let var = self.load(&var_ptr);
+                let mut var_ptr = self.scopes.get_scalar(&format!(" {}", str))?.clone();
+                let var = self.load(&mut var_ptr);
                 let zero = self.function.create_float64_constant(0.0);
                 let new_ptr = self.runtime.copy_string(&mut self.function, var.pointer);
                 ValueT::new(string_tag, zero, new_ptr)
@@ -324,8 +330,8 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 // Convert left and right to floats if needed and perform the MathOp
                 let mut left = self.compile_expr(left_expr)?;
                 let mut right = self.compile_expr(right_expr)?;
-                let left_float = self.to_float(&left, left_expr.typ);
-                let right_float = self.to_float(&right, right_expr.typ);
+                let left_float = self.val_to_float(&left, left_expr.typ);
+                let right_float = self.val_to_float(&right, right_expr.typ);
                 let result = match op {
                     MathOp::Minus => self.function.insn_sub(&left_float, &right_float),
                     MathOp::Plus => self.function.insn_add(&left_float, &right_float),
@@ -359,11 +365,11 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                     .insn_branch_if(&both_float, &mut both_float_lbl);
 
                 // String/Float Float/String String/String case
-                let left_as_string = self.to_string(&left, left_expr.typ);
-                let right_as_string = self.to_string(&right, right_expr.typ);
+                let left_as_string = self.val_to_string(&left, left_expr.typ);
+                let right_as_string = self.val_to_string(&right, right_expr.typ);
                 let res = self.runtime.binop(&mut self.function, left_as_string.clone(), right_as_string.clone(), *op);
                 let result = ValueT::new(self.float_tag.clone(), res, self.zero_ptr.clone());
-                self.store(&self.binop_scratch.clone(), &result);
+                self.store(&mut self.binop_scratch.clone(), &result);
                 self.drop(&left_as_string);
                 self.drop(&right_as_string);
                 self.function.insn_branch(&mut done_lbl);
@@ -372,11 +378,11 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 self.function.insn_label(&mut both_float_lbl);
                 let float_val = self.float_binop(&left.float, &right.float, *op);
                 let value = ValueT::new(tag, float_val, self.zero_ptr.clone());
-                self.store(&self.binop_scratch.clone(), &value);
+                self.store(&mut self.binop_scratch.clone(), &value);
 
                 // Done load the result from scratch
                 self.function.insn_label(&mut done_lbl);
-                self.load(&self.binop_scratch.clone())
+                self.load(&mut self.binop_scratch.clone())
             }
             Expr::LogicalOp(left, op, right) => {
                 let float_1 = self.function.create_float64_constant(1.0);
@@ -433,11 +439,11 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 // If it's a string we need to call copy_string to update the reference count.
                 // If it's a float no-op.
                 // If type is unknown we check tag then copy_string if needed.
-                let var_ptr = self.scopes.get_scalar(var)?.clone();
+                let mut var_ptr = self.scopes.get_scalar(var)?.clone();
                 let string_tag = self.string_tag();
                 match expr.typ {
                     ScalarType::String => {
-                        let var = self.load(&var_ptr);
+                        let var = self.load(&mut var_ptr);
                         let zero = self.function.create_float64_constant(0.0);
                         let new_ptr = self.runtime.copy_string(&mut self.function, var.pointer);
                         ValueT::new(string_tag, zero, new_ptr)
@@ -446,7 +452,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                         // If it's a string variable copy it and store that pointer in self.binop_scratch.pointer
                         // otherwise store zero self.binop_scratch.pointer. After this load self.binop_scratch.pointer
                         // and make a new value with the old tag/float + new string pointer.
-                        let var = self.load(&var_ptr);
+                        let var = self.load(&mut var_ptr);
                         let is_not_str = self.function.insn_eq(&string_tag, &var.tag);
                         let mut done_lbl = Label::new();
                         let mut is_not_str_lbl = Label::new();
@@ -462,7 +468,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                         let str_ptr = self.function.insn_load(&self.binop_scratch.pointer);
                         ValueT::new(var.tag, var.float, str_ptr)
                     }
-                    ScalarType::Float => self.load(&var_ptr),
+                    ScalarType::Float => self.load(&mut var_ptr),
                 }
             }
             Expr::Column(col) => {
@@ -498,17 +504,17 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 self.function.insn_branch_if(&bool_value, &mut truthy_lbl);
 
                 let falsy_result = self.compile_expr(expr2)?;
-                self.store(&self.binop_scratch.clone(), &falsy_result);
+                self.store(&mut self.binop_scratch.clone(), &falsy_result);
                 self.function.insn_branch(&mut done_lbl);
 
                 self.function.insn_label(&mut truthy_lbl);
 
                 let truthy_result = self.compile_expr(expr1)?;
-                self.store(&self.binop_scratch.clone(), &truthy_result);
+                self.store(&mut self.binop_scratch.clone(), &truthy_result);
 
                 self.function.insn_label(&mut done_lbl);
 
-                self.load(&self.binop_scratch.clone())
+                self.load(&mut self.binop_scratch.clone())
             }
             Expr::ArrayIndex { name, indices } => {
                 let values = self.compile_exprs_to_string(indices)?;
@@ -516,7 +522,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 let array_id = *self.array_map.get(name).unwrap();
                 // Runtime will set the out_tag out_float and out_ptr pointers to a new value. Just load em
                 self.runtime.array_access(&mut self.function, array_id, indices, self.ptr_scratch.tag.clone(), self.ptr_scratch.float.clone(), self.ptr_scratch.pointer.clone());
-                let tag = self.function.insn_load_relative(&self.ptr_scratch.tag, 0, &Context::int_type());
+                let tag = self.function.insn_load_relative(&self.ptr_scratch.tag, 0, &Context::sbyte_type());
                 let float = self.function.insn_load_relative(&self.ptr_scratch.float, 0, &Context::float64_type());
                 let pointer = self.function.insn_load_relative(&self.ptr_scratch.pointer, 0, &Context::void_ptr_type());
                 ValueT::new(tag, float, pointer)
