@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 // TODO: Should be able to print a code sample with line numbers
 #[derive(Debug)]
 pub struct PrintableError {
-    msg: String,
+    pub msg: String,
 }
 
 impl Display for PrintableError {

@@ -234,7 +234,7 @@ pub struct Function {
     pub name: String,
     pub args: Vec<Arg>,
     pub body: Stmt,
-    pub return_type: ArgT,
+    pub return_type: ScalarType,
 }
 
 impl Function {
@@ -243,7 +243,7 @@ impl Function {
             name,
             args: args.into_iter().map(|arg| Arg { name: arg, typ: ArgT::Unused }).collect(),
             body,
-            return_type: ArgT::Unused,
+            return_type: ScalarType::Variable,
         }
     }
 }

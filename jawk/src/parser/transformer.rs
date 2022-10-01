@@ -37,9 +37,3 @@ pub fn transform(begins: Vec<Stmt>, ends: Vec<Stmt>, pas: Vec<PatternAction>) ->
     }
     group_vec_of_stmt(prog)
 }
-
-
-struct FunctionTransformer {
-    args: Vec<String>,
-    name: String,
-}
