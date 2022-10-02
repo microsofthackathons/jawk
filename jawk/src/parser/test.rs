@@ -640,6 +640,26 @@ fn array_access_assign_multi_dim() {
 }
 
 #[test]
+fn test_expr_call_nonary() {
+    actual!(actual, "{ a() }");
+    let expr = Expr::Call { target: "a".to_string(), args: vec![] };
+    assert_eq!(actual, sprogram!(Stmt::Expr(expr.into())));
+}
+#[test]
+fn test_expr_call_unary() {
+    actual!(actual, "{ a(1) }");
+    let expr = Expr::Call { target: "a".to_string(), args: vec![num!(1.0)] };
+    assert_eq!(actual, sprogram!(Stmt::Expr(expr.into())));
+}
+
+#[test]
+fn test_expr_call_many() {
+    actual!(actual, "{ a(1,3,5) }");
+    let expr = Expr::Call { target: "a".to_string(), args: vec![num!(1.0),num!(3.0),num!(5.0)] }.into();
+    assert_eq!(actual, sprogram!(Stmt::Expr(expr)));
+}
+
+#[test]
 fn array_assign_multi_expr() {
     actual!(actual, "{ a[0+1, a[0]] }");
     let zero = bnum!(0.0);

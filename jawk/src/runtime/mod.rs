@@ -31,9 +31,9 @@ pub trait Runtime {
     fn binop(&mut self, func: &mut Function, ptr1: Value, ptr2: Value, binop: BinOp) -> Value;
     fn print_error(&mut self, func: &mut Function, code: ErrorCode);
     fn allocate_arrays(&mut self, count: usize);
-    fn array_access(&mut self, func: &mut Function, array: i32, index: Value, out_tag_ptr: Value, out_float_ptr: Value, out_ptr_ptr: Value);
-    fn array_assign(&mut self, func: &mut Function, array: i32, index: Value, tag: Value, float: Value, ptr: Value);
-    fn in_array(&mut self, func: &mut Function, array: i32, index: Value) -> Value;
+    fn array_access(&mut self, func: &mut Function, array_id: Value, index: Value, out_tag_ptr: Value, out_float_ptr: Value, out_ptr_ptr: Value);
+    fn array_assign(&mut self, func: &mut Function, array_id: Value, index: Value, tag: Value, float: Value, ptr: Value);
+    fn in_array(&mut self, func: &mut Function, array_id: Value, index: Value) -> Value;
     fn concat_array_indices(&mut self, func: &mut Function, lhs: Value, rhs: Value) -> Value;
     fn printf(&mut self, func: &mut Function, fstring: Value, nargs: Value, args: Value);
 }

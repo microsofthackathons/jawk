@@ -1,7 +1,8 @@
 use crate::args::AwkArgs;
 use crate::lexer::lex;
 use crate::parser::{Expr, parse};
-use crate::typing::analyze;
+use crate::printable_error::PrintableError;
+use crate::typing::{AnalysisResults, analyze};
 
 mod args;
 mod codgen;
@@ -36,9 +37,13 @@ fn main() {
     let mut ast = parse(lex(&program).unwrap());
 
     // 4
-    if let Err(err) = analyze(&mut ast) {
-        eprintln!("{}", err);
-    }
+    let analysis_results = match analyze(&mut ast) {
+        Ok(results) => results,
+        Err(err) => {
+            eprintln!("{}", err);
+            return;
+        }
+    };
 
     if args.debug {
         println!("{:?}", ast.main.body);
@@ -47,11 +52,11 @@ fn main() {
 
     // 5
     if args.debug {
-        if let Err(err) = codgen::compile_and_capture(ast.main.body, &args.files) {
+        if let Err(err) = codgen::compile_and_capture(ast, &args.files, analysis_results) {
             eprintln!("{}", err);
         }
     } else {
-        if let Err(err) = codgen::compile_and_run(ast.main.body, &args.files) {
+        if let Err(err) = codgen::compile_and_run(ast, &args.files, analysis_results) {
             eprintln!("{}", err);
         }
     }

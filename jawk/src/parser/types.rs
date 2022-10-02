@@ -217,7 +217,6 @@ impl Display for Expr {
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum ArgT {
-    Unused,
     Scalar,
     Array,
 }
@@ -225,7 +224,6 @@ pub enum ArgT {
 impl Display for ArgT {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ArgT::Unused => write!(f, "u"),
             ArgT::Scalar => write!(f, "s"),
             ArgT::Array => write!(f, "a"),
         }
@@ -235,12 +233,16 @@ impl Display for ArgT {
 #[derive(Debug, PartialEq)]
 pub struct Arg {
     pub name: String,
-    pub typ: ArgT,
+    pub typ: Option<ArgT>,
 }
 
 impl Display for Arg {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({} {})", self.typ, self.name)
+        let typ = match self.typ {
+            None => "u".to_string(),
+            Some(inner) => format!("{}", inner)
+        };
+        write!(f, "({} {})", typ, self.name)
     }
 }
 
@@ -256,7 +258,7 @@ impl Function {
     pub fn new(name: String, args: Vec<String>, body: Stmt) -> Self {
         Function {
             name,
-            args: args.into_iter().map(|arg| Arg { name: arg, typ: ArgT::Unused }).collect(),
+            args: args.into_iter().map(|arg| Arg { name: arg, typ: None }).collect(),
             body,
             return_type: ScalarType::Variable,
         }

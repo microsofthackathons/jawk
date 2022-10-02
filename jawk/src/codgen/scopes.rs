@@ -1,41 +1,77 @@
 use crate::codgen::ValuePtrT;
 use crate::printable_error::PrintableError;
 use std::collections::HashMap;
+use std::thread::scope;
 use gnu_libjit::Value;
 
 
+pub struct Scope {
+    pub scalars: HashMap<String, ValuePtrT>,
+    pub arrays: HashMap<String, Value>,
+}
+
+impl Scope {
+    pub fn new() -> Self {
+        Self { scalars: HashMap::new(), arrays: HashMap::new() }
+    }
+}
+
 pub struct Scopes {
-    scalars: HashMap<String, ValuePtrT>,
+    levels: Vec<Scope>,
 }
 
 impl Scopes {
     pub fn new() -> Self {
         Scopes {
-            scalars: HashMap::default(),
+            levels: vec![Scope::new()],
         }
     }
     pub fn insert_scalar(&mut self, name: String, value: ValuePtrT) -> Result<(), PrintableError> {
-        // if self.arrays.contains_key(&name) {
-        //     return Err(PrintableError::new(format!("fatal: attempt to use array `{}` in a scalar context", name)))
-        // }
-        if let Some(_) = self.scalars.get(&name) {
+        let mut inner_scope = self.levels.last_mut().unwrap();
+
+        if inner_scope.scalars.get(&name).is_some() {
             return Err(PrintableError::new(format!(
-                "Name {} is already in used, cannot shadow it",
-                name
+                "Name {} is already in used, cannot shadow it", &name
             )));
         }
-        self.scalars.insert(name, value);
+        inner_scope.scalars.insert(name, value);
+        Ok(())
+    }
+
+    pub fn insert_array(&mut self, name: String, value: Value) -> Result<(), PrintableError> {
+        let mut inner_scope = self.levels.last_mut().unwrap();
+
+        if inner_scope.arrays.get(&name).is_some() {
+            return Err(PrintableError::new(format!(
+                "Name {} is already in used, cannot shadow it", &name
+            )));
+        }
+        inner_scope.arrays.insert(name, value);
         Ok(())
     }
 
     pub fn get_scalar(&self, name: &str) -> Result<&ValuePtrT, PrintableError> {
-        // if self.arrays.contains_key(name) {
-        //     return Err(PrintableError::new(format!("fatal: attempt to use array `{}` in a scalar context", name)))
-        // }
-        if let Some(scalar) = self.scalars.get(name) {
-            Ok(scalar)
-        } else {
-            panic!("Scalar {} does not exist", name);
+        for scope in self.levels.iter().rev() {
+            if let Some(scalar) = scope.scalars.get(name) {
+                return Ok(scalar)
+            }
         }
+        panic!("Scalar {} does not exist", name);
+    }
+
+    pub fn get_array(&self, name: &str) -> Result<&Value, PrintableError> {
+        for scope in self.levels.iter().rev() {
+            if let Some(arr) = scope.arrays.get(name) {
+                return Ok(arr)
+            }
+        }
+        panic!("Array {} does not exist", name);
+    }
+
+    pub fn open_scope(&mut self) {
+        self.levels.push(Scope::new())
+    }
+    pub fn close_scope(&mut self) -> Scope {
+        self.levels.pop().unwrap()
     }
 }

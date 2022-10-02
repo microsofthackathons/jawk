@@ -79,15 +79,15 @@ fn test_perf(interpreter: &str, prog: &str, oracle_output: &str, file: &PathBuf)
 
 fn test_it<S: AsRef<str>>(prog: &str, file: S, oracle_output: &str) {
     println!("Program:\n{}", prog);
-    let mut ast = parse(lex(&prog).unwrap());
-    analyze(&mut ast).unwrap();
-    println!("Ast:\n{}", &ast.main.body);
+    let mut program = parse(lex(&prog).unwrap());
+    let analysis_results = analyze(&mut program).unwrap();
+    println!("Ast:\n{}", &program.main.body);
 
     let temp_dir = tempdir().unwrap();
     let file_path = temp_dir.path().join("tmp");
     std::fs::write(file_path.clone(), file.as_ref()).unwrap();
     let file_path_string = file_path.to_str().unwrap().to_string();
-    let res = compile_and_capture(ast.main.body, &[file_path_string]).unwrap();
+    let res = compile_and_capture(program, &[file_path_string], analysis_results).unwrap();
     assert_eq!(
         res.strings_in(), res.strings_out(),
         "runtime strings_in didn't match string_out. Possible mem leak `{}` in vs `{}` out",

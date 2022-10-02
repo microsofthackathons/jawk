@@ -1,7 +1,7 @@
 use crate::codgen::scopes::Scopes;
 use crate::codgen::subroutines::Subroutines;
 use crate::lexer::{BinOp, LogicalOp, MathOp};
-use crate::parser::{ScalarType, Stmt, TypedExpr};
+use crate::parser::{Program, ScalarType, Stmt, TypedExpr};
 use crate::printable_error::PrintableError;
 use crate::runtime::{LiveRuntime, Runtime, TestRuntime};
 use crate::Expr;
@@ -85,20 +85,18 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
             self.function.create_value_void_ptr())
     }
 
-    pub fn define_all_vars(&mut self, prog: &Stmt) -> Result<HashSet<String>, PrintableError> {
+    pub fn define_all_globals(&mut self, prog: &Program) -> Result<(), PrintableError> {
         // All variables are init'ed to the empty string.
-        let extractor_results = variable_extract::extract(prog);
-        for var in &extractor_results.vars {
+        for var in self.analysis_results.global_scalars.clone() {
             let mut stack_value = self.new_stack_value();
             let init_value = ValueT::new(self.string_tag.clone(), self.zero_f.clone(), self.runtime.empty_string(&mut self.function));
-
             self.store(&mut stack_value, &init_value);
             self.scopes.insert_scalar(var.clone(), stack_value)?;
         }
 
         // All string constants like a in `print "a"`; are stored in a variable
         // the name of the variable is " a". Just a space in front to prevent collisions.
-        for str_const in extractor_results.str_consts {
+        for str_const in self.analysis_results.str_consts.clone() {
             let mut stack_value = self.new_stack_value();
             let space_in_front = format!(" {}", str_const);
 
@@ -110,9 +108,13 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
             self.scopes.insert_scalar(space_in_front, stack_value)?;
         }
 
-        self.runtime.allocate_arrays(extractor_results.arrays.len());
-        self.array_map = extractor_results.arrays;
-        Ok(extractor_results.vars)
+        self.runtime.allocate_arrays(self.analysis_results.global_arrays.len());
+
+        for (name, idx) in self.analysis_results.global_arrays.clone() {
+            let int_value = self.function.create_int_constant(idx);
+            self.scopes.insert_array(name.clone(), int_value)?;
+        }
+        Ok(())
     }
 
     pub fn float_is_truthy_ret_int(&mut self, value: &Value) -> Value {
@@ -148,7 +150,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
         if let ScalarType::Float = typ {
             return;
         }
-        let value = self.load( value);
+        let value = self.load(value);
         self.drop_if_str(&value, typ)
     }
 

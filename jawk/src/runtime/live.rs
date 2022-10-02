@@ -477,21 +477,18 @@ impl Runtime for LiveRuntime {
         );
     }
 
-    fn array_access(&mut self, func: &mut Function, array: i32, index: Value, out_tag_ptr: Value, out_float_ptr: Value, out_ptr_ptr: Value) {
+    fn array_access(&mut self, func: &mut Function, array: Value, index: Value, out_tag_ptr: Value, out_float_ptr: Value, out_ptr_ptr: Value) {
         let data_ptr = self.data_ptr(func);
-        let array = func.create_int_constant(array);
         func.insn_call_native(self.array_access, vec![data_ptr, array, index, out_tag_ptr, out_float_ptr, out_ptr_ptr], None, Abi::Cdecl);
     }
 
-    fn array_assign(&mut self, func: &mut Function, array: i32, index: Value, tag: Value, float: Value, ptr: Value) {
+    fn array_assign(&mut self, func: &mut Function, array: Value, index: Value, tag: Value, float: Value, ptr: Value) {
         let data_ptr = self.data_ptr(func);
-        let array = func.create_int_constant(array);
         func.insn_call_native(self.array_assign, vec![data_ptr, array, index, tag, float, ptr], None, Abi::Cdecl);
     }
 
-    fn in_array(&mut self, func: &mut Function, array: i32, index: Value) -> Value {
+    fn in_array(&mut self, func: &mut Function, array: Value, index: Value) -> Value {
         let data_ptr = self.data_ptr(func);
-        let array = func.create_int_constant(array);
         func.insn_call_native(self.in_array, vec![data_ptr, array, index], Some(Context::float64_type()), Abi::Cdecl)
     }
 

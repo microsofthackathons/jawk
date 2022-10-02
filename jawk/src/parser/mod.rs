@@ -25,12 +25,6 @@ pub struct Program {
 }
 
 impl Program {
-    // #[cfg(test)]
-    // pub fn new(begins: Vec<Stmt>, ends: Vec<Stmt>, pas: Vec<PatternAction>) -> Program {
-    //     let body = transform(begins, ends, pas);
-    //     let main = Function::new("main function".to_string(), vec![], body);
-    //     Program { main, functions: vec![] }
-    // }
     #[cfg(test)]
     fn new_action_only(action: Stmt) -> Program {
         let body = transform(vec![], vec![], vec![PatternAction::new_action_only(action)]);
@@ -724,8 +718,11 @@ impl Parser {
             }
             Token::Ident(name) => {
                 self.consume(TokenType::Ident, "Expected to parse an ident here");
+
                 if self.matches(&[TokenType::LeftBracket]) {
                     self.array_index(name)
+                } else if self.matches(&[TokenType::LeftParen]){
+                    self.call(name)
                 } else {
                     Expr::Variable(name).into()
                 }
@@ -740,6 +737,26 @@ impl Parser {
             }
             t => panic!("Unexpected token {:?} {}", t, TokenType::name(t.ttype())),
         }
+    }
+
+    fn call(&mut self, target: String) -> TypedExpr {
+        let mut args = vec![];
+        loop {
+            if self.matches(&[TokenType::RightParen])  {
+                break;
+            }
+            if self.peek().ttype() == TokenType::EOF {
+                panic!("Hit EOF while parsing function args")
+            }
+            args.push(self.expression());
+            if self.matches(&[TokenType::Comma]) {
+                continue
+            } else {
+                self.consume(TokenType::RightParen, "Expected a right paren ')' after a function call");
+                break;
+            }
+        }
+        Expr::Call { target, args }.into()
     }
 
     fn array_index(&mut self, name: String) -> TypedExpr {

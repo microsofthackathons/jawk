@@ -12,10 +12,10 @@ mod helpers;
 use crate::codgen::scopes::Scopes;
 use crate::codgen::subroutines::Subroutines;
 use crate::lexer::{BinOp, LogicalOp, MathOp};
-use crate::parser::{ScalarType, Stmt, TypedExpr};
+use crate::parser::{ArgT, Program, ScalarType, Stmt, TypedExpr};
 use crate::printable_error::PrintableError;
 use crate::runtime::{LiveRuntime, Runtime, TestRuntime};
-use crate::Expr;
+use crate::{AnalysisResults, Expr};
 use gnu_libjit::{Abi, Context, Function, Label, Value};
 use std::collections::{HashMap, HashSet};
 use std::os::raw::{c_char, c_int, c_long, c_void};
@@ -37,19 +37,19 @@ pub const STRING_TAG: i8 = 1;
 pub const ARRAY_TAG: i8 = 1;
 
 // Entry point to run a program
-pub fn compile_and_run(prog: Stmt, files: &[String]) -> Result<(), PrintableError> {
+pub fn compile_and_run(prog: Program, files: &[String], analysis_results: AnalysisResults) -> Result<(), PrintableError> {
     let mut runtime = LiveRuntime::new(files.to_vec());
-    let mut codegen = CodeGen::new(&mut runtime);
+    let mut codegen = CodeGen::new(&mut runtime, analysis_results);
     codegen.compile(prog, false)?;
     codegen.run();
     Ok(())
 }
 
 // Entry point to run and debug/test a program. Use the test runtime.
-pub fn compile_and_capture(prog: Stmt, files: &[String]) -> Result<TestRuntime, PrintableError> {
+pub fn compile_and_capture(prog: Program, files: &[String], analysis_results: AnalysisResults) -> Result<TestRuntime, PrintableError> {
     let mut test_runtime = TestRuntime::new(files.to_vec());
     {
-        let mut codegen = CodeGen::new(&mut test_runtime);
+        let mut codegen = CodeGen::new(&mut test_runtime, analysis_results);
         codegen.compile(prog, true)?;
         codegen.run();
     }
@@ -91,11 +91,17 @@ struct CodeGen<'a, RuntimeT: Runtime> {
     float_tag: Value,
     string_tag: Value,
 
-    break_lbl: Vec<Label>, // Where a 'break' keyword should jump
+    break_lbl: Vec<Label>,
+    return_lbl: Option<Label>,
+    // Where a 'break' keyword should jump
+    analysis_results: AnalysisResults,
+
+    function_map: HashMap<String, gnu_libjit::Function>,
+
 }
 
 impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
-    fn new(runtime: &'a mut RuntimeT) -> Self {
+    fn new(runtime: &'a mut RuntimeT, analysis_results: AnalysisResults) -> Self {
         let mut context = Context::new();
         let mut function = context
             .function(Abi::Cdecl, Context::float64_type(), vec![])
@@ -142,6 +148,9 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
             float_tag,
             string_tag,
             break_lbl: vec![],
+            analysis_results,
+            function_map: HashMap::new(),
+            return_lbl: None,
         };
         codegen
     }
@@ -151,15 +160,21 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
         function();
     }
 
-    fn compile(&mut self, prog: Stmt, dump: bool) -> Result<(), PrintableError> {
+    fn compile(&mut self, prog: Program, dump: bool) -> Result<(), PrintableError> {
         let zero = self.function.create_float64_constant(0.0);
-        let vars = self.define_all_vars(&prog)?;
+        self.define_all_globals(&prog)?;
 
-        // Compile program
-        self.compile_stmt(&prog)?;
+        // Compile all non-main functions functions
+        for parser_func in &prog.functions {
+            let func = self.compile_function(parser_func, dump)?;
+            self.function_map.insert(parser_func.name.clone(), func);
+        }
+
+        // Compile main program
+        self.compile_stmt(&prog.main.body)?;
 
         // This is just so # strings allocated == # of strings freed which makes testing easier
-        for var in vars {
+        for var in self.analysis_results.global_scalars.clone() {
             let mut var_ptrs = self.scopes.get_scalar(&var)?.clone();
             self.drop_if_string_ptr(&mut var_ptrs, ScalarType::Variable);
         }
@@ -171,6 +186,73 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
         }
         self.function.compile();
         Ok(())
+    }
+
+    fn compile_function(&mut self, parser_func: &crate::parser::Function, dump: bool) -> Result<gnu_libjit::Function, PrintableError> {
+        self.scopes.open_scope();
+
+        let mut params = vec![];
+        for arg in &parser_func.args {
+            let arg_typ = if let Some(arg_typ) = arg.typ { arg_typ } else { continue; };
+            match arg_typ {
+                ArgT::Scalar => {
+                    params.push(Context::sbyte_type());
+                    params.push(Context::float64_type());
+                    params.push(Context::void_ptr_type());
+                }
+                ArgT::Array => {
+                    params.push(Context::int_type());
+                }
+            }
+        }
+
+        let mut function = self.context.function(Abi::Cdecl, Context::void_ptr_type(), params).unwrap();
+        std::mem::swap(&mut self.function, &mut function);
+
+        self.return_lbl = Some(Label::new());
+
+        let mut arg_idx = 0;
+        for arg in &parser_func.args {
+            let arg_typ = if let Some(arg_typ) = arg.typ { arg_typ } else { continue; };
+            match arg_typ {
+                ArgT::Scalar => {
+                    let mut scalar = self.new_stack_value();
+                    self.scopes.insert_scalar(arg.name.clone(), scalar.clone())?;
+                    let tag = self.function.arg(arg_idx).unwrap();
+                    let float = self.function.arg(arg_idx + 1).unwrap();
+                    let ptr = self.function.arg(arg_idx + 2).unwrap();
+                    let value_from_args = ValueT::new(tag, float, ptr);
+                    // Load args into normal stack value
+                    // TODO: Can we use the args as our storage instead of a separate stack allocation?
+                    // And thus avoid this pointless store
+                    self.store(&mut scalar, &value_from_args);
+                    arg_idx += 3;
+                }
+                ArgT::Array => {
+                    let array = self.function.arg(arg_idx).unwrap();
+                    self.scopes.insert_array(arg.name.clone(), array)?;
+                    arg_idx += 1;
+                }
+            }
+        }
+
+        self.compile_stmt(&parser_func.body)?;
+
+        self.function.insn_label(&mut self.return_lbl.clone().unwrap());
+        self.return_lbl = None;
+        // Drop all strings we may have stored in function locals
+        let mut scope = self.scopes.close_scope();
+        for x in scope.scalars.iter_mut() {
+            self.drop_if_string_ptr(x.1, ScalarType::Variable);
+        }
+
+
+        std::mem::swap(&mut self.function, &mut function);
+        if dump {
+            println!("{}", function.dump().unwrap());
+        }
+        function.compile();
+        Ok(function)
     }
 
     fn compile_stmt(&mut self, stmt: &Stmt) -> Result<(), PrintableError> {
@@ -517,7 +599,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
             Expr::ArrayIndex { name, indices } => {
                 let values = self.compile_exprs_to_string(indices)?;
                 let indices = self.concat_indices(&values);
-                let array_id = *self.array_map.get(name).unwrap();
+                let array_id = self.scopes.get_array(name).unwrap().clone();
                 // Runtime will set the out_tag out_float and out_ptr pointers to a new value. Just load em
                 self.runtime.array_access(&mut self.function, array_id, indices, self.ptr_scratch.tag.clone(), self.ptr_scratch.float.clone(), self.ptr_scratch.pointer.clone());
                 let tag = self.function.insn_load_relative(&self.ptr_scratch.tag, 0, &Context::sbyte_type());
@@ -528,7 +610,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
             Expr::InArray { name, indices } => {
                 let values = self.compile_exprs_to_string(indices)?;
                 let value = self.concat_indices(&values);
-                let array_id = *self.array_map.get(name).unwrap();
+                let array_id = self.scopes.get_array(name).unwrap().clone();
                 let float_result = self.runtime.in_array(&mut self.function, array_id, value);
                 ValueT::new(self.float_tag(), float_result, self.zero_ptr.clone())
             }
@@ -536,7 +618,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
                 let rhs = self.compile_expr(value)?;
                 let values = self.compile_exprs_to_string(indices)?;
                 let indices = self.concat_indices(&values);
-                let array_id = *self.array_map.get(name).unwrap();
+                let array_id = self.scopes.get_array(name).unwrap().clone();
                 let result_copy = self.copy_if_string(rhs.clone(), value.typ);
                 self.runtime.array_assign(&mut self.function, array_id, indices, rhs.tag, rhs.float, rhs.pointer);
                 result_copy
