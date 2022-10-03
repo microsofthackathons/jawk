@@ -1,7 +1,6 @@
 mod scopes;
 // mod runtime;
 // mod subroutines;
-pub mod variable_extract;
 
 pub use value::{ValuePtrT, ValueT};
 
@@ -16,11 +15,12 @@ use crate::parser::{ArgT, Program, ScalarType, Stmt, TypedExpr};
 use crate::printable_error::PrintableError;
 use crate::runtime::{LiveRuntime, Runtime, TestRuntime};
 use crate::{AnalysisResults, Expr};
-use gnu_libjit::{Abi, Context, Function, Label, Value};
+use gnu_libjit::{Abi, Context, Label, Value};
 use std::collections::{HashMap, HashSet};
 use std::os::raw::{c_char, c_int, c_long, c_void};
 use std::rc::Rc;
 use crate::parser::Stmt::Print;
+use crate::typing::{TypedProgram, TypedFunc};
 
 /// ValueT is the jit values that make up a struct. It's not a tagged union
 /// just a struct with only one other field being valid to read at a time based on the tag field.
@@ -34,22 +34,21 @@ use crate::parser::Stmt::Print;
 
 pub const FLOAT_TAG: i8 = 0;
 pub const STRING_TAG: i8 = 1;
-pub const ARRAY_TAG: i8 = 1;
 
 // Entry point to run a program
-pub fn compile_and_run(prog: Program, files: &[String], analysis_results: AnalysisResults) -> Result<(), PrintableError> {
+pub fn compile_and_run(prog: Program, files: &[String]) -> Result<(), PrintableError> {
     let mut runtime = LiveRuntime::new(files.to_vec());
-    let mut codegen = CodeGen::new(&mut runtime, analysis_results);
+    let mut codegen = CodeGen::new(&mut runtime);
     codegen.compile(prog, false)?;
     codegen.run();
     Ok(())
 }
 
 // Entry point to run and debug/test a program. Use the test runtime.
-pub fn compile_and_capture(prog: Program, files: &[String], analysis_results: AnalysisResults) -> Result<TestRuntime, PrintableError> {
+pub fn compile_and_capture(prog: Program, files: &[String]) -> Result<TestRuntime, PrintableError> {
     let mut test_runtime = TestRuntime::new(files.to_vec());
     {
-        let mut codegen = CodeGen::new(&mut test_runtime, analysis_results);
+        let mut codegen = CodeGen::new(&mut test_runtime);
         codegen.compile(prog, true)?;
         codegen.run();
     }
@@ -59,7 +58,7 @@ pub fn compile_and_capture(prog: Program, files: &[String], analysis_results: An
 
 struct CodeGen<'a, RuntimeT: Runtime> {
     // Core stuff
-    pub(crate) function: Function,
+    pub(crate) function: gnu_libjit::Function,
     scopes: Scopes,
     // Stores the points to each global variable in the program
     pub(crate) context: Context,
@@ -91,17 +90,17 @@ struct CodeGen<'a, RuntimeT: Runtime> {
     float_tag: Value,
     string_tag: Value,
 
-    break_lbl: Vec<Label>,
-    return_lbl: Option<Label>,
     // Where a 'break' keyword should jump
-    analysis_results: AnalysisResults,
+    break_lbl: Vec<Label>,
+    // Where a return should jump after storing return value
+    return_lbl: Option<Label>,
 
     function_map: HashMap<String, gnu_libjit::Function>,
 
 }
 
 impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
-    fn new(runtime: &'a mut RuntimeT, analysis_results: AnalysisResults) -> Self {
+    fn new(runtime: &'a mut RuntimeT) -> Self {
         let mut context = Context::new();
         let mut function = context
             .function(Abi::Cdecl, Context::float64_type(), vec![])
@@ -148,7 +147,6 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
             float_tag,
             string_tag,
             break_lbl: vec![],
-            analysis_results,
             function_map: HashMap::new(),
             return_lbl: None,
         };
@@ -174,7 +172,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
         self.compile_stmt(&prog.main.body)?;
 
         // This is just so # strings allocated == # of strings freed which makes testing easier
-        for var in self.analysis_results.global_scalars.clone() {
+        for var in prog.global_analysis.global_scalars.clone() {
             let mut var_ptrs = self.scopes.get_scalar(&var)?.clone();
             self.drop_if_string_ptr(&mut var_ptrs, ScalarType::Variable);
         }
@@ -258,7 +256,13 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
     fn compile_stmt(&mut self, stmt: &Stmt) -> Result<(), PrintableError> {
         match stmt {
             Stmt::Return(ret) => {
-                todo!("return")
+                let ret_val = if let Some(ret) = ret {
+                    self.compile_expr(ret)?
+                } else {
+                    ValueT::new(self.float_tag.clone(), self.zero_f.clone(), self.zero_ptr.clone())
+                };
+                self.store(&mut self.binop_scratch.clone(), &ret_val);
+                self.function.insn_branch(&mut self.return_lbl.clone().unwrap())
             }
             Stmt::Printf { args, fstring } => {
                 let fstring_val = self.compile_expr(fstring)?;
@@ -352,7 +356,13 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
     fn compile_expr(&mut self, expr: &TypedExpr) -> Result<ValueT, PrintableError> {
         Ok(match &expr.expr {
             Expr::Call { target, args } => {
-                todo!("func call")
+                // let mut compiled_args = Vec::with_capacity(args.len());
+                // let mut params = vec![];
+                // for arg in args {
+                //
+                // }
+                // let target = self.function_map.get(target).unwrap();
+                todo!()
             }
             Expr::ScalarAssign(var, value) => {
                 // BEGIN: Optimization

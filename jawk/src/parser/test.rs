@@ -127,7 +127,7 @@ fn test_mathop_exponent() {
                 bnum!(2.0),
                 MathOp::Exponent,
                 bnum!(2.0)
-            )))],vec![]
+            )))], vec![],
         )
     );
 }
@@ -305,7 +305,7 @@ fn test_pattern_only() {
             vec![],
             vec![PatternAction::new_pattern_only(texpr!(Expr::Variable(
                 "test".to_string()
-            )))],vec![]
+            )))], vec![],
         )
     );
 }
@@ -645,6 +645,7 @@ fn test_expr_call_nonary() {
     let expr = Expr::Call { target: "a".to_string(), args: vec![] };
     assert_eq!(actual, sprogram!(Stmt::Expr(expr.into())));
 }
+
 #[test]
 fn test_expr_call_unary() {
     actual!(actual, "{ a(1) }");
@@ -655,7 +656,7 @@ fn test_expr_call_unary() {
 #[test]
 fn test_expr_call_many() {
     actual!(actual, "{ a(1,3,5) }");
-    let expr = Expr::Call { target: "a".to_string(), args: vec![num!(1.0),num!(3.0),num!(5.0)] }.into();
+    let expr = Expr::Call { target: "a".to_string(), args: vec![num!(1.0), num!(3.0), num!(5.0)] }.into();
     assert_eq!(actual, sprogram!(Stmt::Expr(expr)));
 }
 
@@ -693,3 +694,15 @@ fn test_function() {
     let begin = Stmt::Print(Expr::NumberF64(1.0).into());
     assert_eq!(actual, Program::new(vec![begin], vec![], vec![], vec![function]))
 }
+
+#[test]
+fn test_call() {
+    actual!(actual, "BEGIN { a(1,\"2\"); }");
+    let args = vec![
+        Expr::NumberF64(1.0).into(),
+        Expr::String("2".to_string()).into(),
+    ];
+    let begin = Stmt::Expr(Expr::Call { target: "a".to_string(), args }.into());
+    assert_eq!(actual, Program::new(vec![begin], vec![], vec![], vec![]))
+}
+

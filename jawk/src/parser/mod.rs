@@ -6,6 +6,7 @@ use std::fmt::{Display, Formatter, write};
 use crate::lexer::{BinOp, LogicalOp, MathOp, Token, TokenType};
 pub use crate::parser::types::PatternAction;
 pub use types::{Expr, Function, ScalarType, Stmt, TypedExpr, Arg, ArgT};
+use crate::AnalysisResults;
 use crate::parser::transformer::transform;
 
 // Pattern Action Type
@@ -22,18 +23,19 @@ enum PAType {
 pub struct Program {
     pub functions: Vec<Function>,
     pub main: Function,
+    pub global_analysis: AnalysisResults,
 }
 
 impl Program {
     #[cfg(test)]
     fn new_action_only(action: Stmt) -> Program {
         let body = transform(vec![], vec![], vec![PatternAction::new_action_only(action)]);
-        Program { main: Function::new("main function".to_string(), vec![], body), functions: vec![] }
+        Program { main: Function::new("main function".to_string(), vec![], body), functions: vec![], global_analysis: AnalysisResults::new()}
     }
     pub fn new(begins: Vec<Stmt>, ends: Vec<Stmt>, pas: Vec<PatternAction>, functions: Vec<Function>) -> Program {
         let body = transform(begins, ends, pas);
         let main = Function::new("main function".to_string(), vec![], body);
-        Program { main, functions }
+        Program { main, functions, global_analysis: AnalysisResults::new()}
     }
 }
 

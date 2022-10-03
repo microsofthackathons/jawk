@@ -42,8 +42,7 @@ fn test_against(interpreter: &str, prog: &str, oracle_output: &str, file: &PathB
         Ok(_) => {}
         Err(err) => return, // this interpreter doesn't exist
     }
-    let mut ast = parse(lex(prog).unwrap());
-    analyze(&mut ast).unwrap();
+    let mut ast = analyze(parse(lex(prog).unwrap())).unwrap();
 
     let output = test_once(interpreter, prog, file);
 
@@ -79,15 +78,14 @@ fn test_perf(interpreter: &str, prog: &str, oracle_output: &str, file: &PathBuf)
 
 fn test_it<S: AsRef<str>>(prog: &str, file: S, oracle_output: &str) {
     println!("Program:\n{}", prog);
-    let mut program = parse(lex(&prog).unwrap());
-    let analysis_results = analyze(&mut program).unwrap();
+    let mut program = analyze(parse(lex(&prog).unwrap())).unwrap();
     println!("Ast:\n{}", &program.main.body);
 
     let temp_dir = tempdir().unwrap();
     let file_path = temp_dir.path().join("tmp");
     std::fs::write(file_path.clone(), file.as_ref()).unwrap();
     let file_path_string = file_path.to_str().unwrap().to_string();
-    let res = compile_and_capture(program, &[file_path_string], analysis_results).unwrap();
+    let res = compile_and_capture(program, &[file_path_string]).unwrap();
     assert_eq!(
         res.strings_in(), res.strings_out(),
         "runtime strings_in didn't match string_out. Possible mem leak `{}` in vs `{}` out",
@@ -953,4 +951,25 @@ test!(
     "BEGIN {printf \"test\"}",
     ONE_LINE,
     "test"
+);
+
+test!(
+    test_func_call,
+    "function a(arr) { arr[0] = 123; } BEGIN { a(b); print b[0]; }",
+    ONE_LINE,
+    "123\n"
+);
+
+test!(
+    test_scalar_func_call,
+    "function a(b,c,d) { return b + c + d; }  BEGIN { print a(1,2,3); }",
+    ONE_LINE,
+    "6\n"
+);
+
+test!(
+    test_string_func_call,
+    "function a(b,c,d) { return b  c  d; }  BEGIN { print a(\"1\",\"2\",\"3\"); }",
+    ONE_LINE,
+    "123\n"
 );

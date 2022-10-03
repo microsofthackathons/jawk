@@ -21,7 +21,7 @@ fn main() {
         Ok(args) => args,
         Err(_) => return,
     };
-    let program = match args.program.load() {
+    let source = match args.program.load() {
         Ok(program) => program,
         Err(e) => {
             eprintln!("{}", e);
@@ -34,10 +34,10 @@ fn main() {
     // 4. Run it
 
     // 1,2,3
-    let mut ast = parse(lex(&program).unwrap());
+    let mut ast = analyze(parse(lex(&source).unwrap()));
 
     // 4
-    let analysis_results = match analyze(&mut ast) {
+    let program = match ast {
         Ok(results) => results,
         Err(err) => {
             eprintln!("{}", err);
@@ -46,17 +46,17 @@ fn main() {
     };
 
     if args.debug {
-        println!("{:?}", ast.main.body);
-        println!("{}", ast.main.body);
+        println!("{:?}", program.main.body);
+        println!("{}", program.main.body);
     }
 
     // 5
     if args.debug {
-        if let Err(err) = codgen::compile_and_capture(ast, &args.files, analysis_results) {
+        if let Err(err) = codgen::compile_and_capture(program, &args.files) {
             eprintln!("{}", err);
         }
     } else {
-        if let Err(err) = codgen::compile_and_run(ast, &args.files, analysis_results) {
+        if let Err(err) = codgen::compile_and_run(program, &args.files) {
             eprintln!("{}", err);
         }
     }

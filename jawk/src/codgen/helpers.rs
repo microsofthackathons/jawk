@@ -9,7 +9,8 @@ use gnu_libjit::{Abi, Context, Function, Label, Value};
 use std::collections::HashSet;
 use std::os::raw::{c_char, c_long, c_void};
 use std::rc::Rc;
-use crate::codgen::{CodeGen, ValuePtrT, ValueT, variable_extract};
+use crate::codgen::{CodeGen, ValuePtrT, ValueT};
+use crate::typing::TypedProgram;
 
 fn float_to_string<RuntimeT: Runtime>(func: &mut Function, runtime: &mut RuntimeT, value: &ValueT) -> Value {
     runtime.number_to_string(func, value.float.clone())
@@ -87,7 +88,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
 
     pub fn define_all_globals(&mut self, prog: &Program) -> Result<(), PrintableError> {
         // All variables are init'ed to the empty string.
-        for var in self.analysis_results.global_scalars.clone() {
+        for var in prog.global_analysis.global_scalars.clone() {
             let mut stack_value = self.new_stack_value();
             let init_value = ValueT::new(self.string_tag.clone(), self.zero_f.clone(), self.runtime.empty_string(&mut self.function));
             self.store(&mut stack_value, &init_value);
@@ -96,7 +97,7 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
 
         // All string constants like a in `print "a"`; are stored in a variable
         // the name of the variable is " a". Just a space in front to prevent collisions.
-        for str_const in self.analysis_results.str_consts.clone() {
+        for str_const in prog.global_analysis.str_consts.clone() {
             let mut stack_value = self.new_stack_value();
             let space_in_front = format!(" {}", str_const);
 
@@ -108,9 +109,9 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
             self.scopes.insert_scalar(space_in_front, stack_value)?;
         }
 
-        self.runtime.allocate_arrays(self.analysis_results.global_arrays.len());
+        self.runtime.allocate_arrays(prog.global_analysis.global_arrays.len());
 
-        for (name, idx) in self.analysis_results.global_arrays.clone() {
+        for (name, idx) in prog.global_analysis.global_arrays.clone() {
             let int_value = self.function.create_int_constant(idx);
             self.scopes.insert_array(name.clone(), int_value)?;
         }
