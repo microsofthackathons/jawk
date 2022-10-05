@@ -1,0 +1,63 @@
+BEGIN {
+    width = 600; height = 300;
+    min_x = -2.1; max_x = 0.6;
+    min_y = -1.2; max_y = 1.2;
+    iters = 32;
+
+    colors[0] = ".";
+    colors[1] = "-";
+    colors[2] = "+";
+    colors[3] = "*";
+    colors[4] = "%%";
+    colors[5] = "#";
+    colors[6] = "$";
+    colors[7] = "@";
+    colors[8] = " ";
+
+    inc_y = (max_y-min_y) / height;
+    inc_x = (max_x-min_x) / width;
+    y = min_y;
+    for (row=0; row<height; row++) {
+        x = min_x;
+        for (col=0; col<width; col++) {
+            zr = zi = 0;
+            for (i=0; i<iters; i++) {
+                old_zr = zr;
+                zr = zr*zr - zi*zi + x;
+                zi = 2*old_zr*zi + y;
+                if (zr*zr + zi*zi > 4) break
+            }
+
+            idx = 0;
+            zzz = i*8/iters;
+            if (zzz < 1) {
+                idx = 0;
+            };
+            if (zzz < 2) {
+                idx = 1;
+            };
+            if (zzz < 3) {
+                idx = 2;
+            };
+            if (zzz < 4) {
+                idx = 3;
+            };
+            if (zzz < 5) {
+                idx = 4;
+            };
+            if (zzz < 6) {
+                idx = 5;
+            };
+            if (zzz < 7) {
+                idx = 6;
+            };
+            if (zzz < 8) {
+                idx = 7;
+            };
+            printf colors[idx];
+            x += inc_x;
+        }
+        y += inc_y;
+        print "";
+    }
+}
