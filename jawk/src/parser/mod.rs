@@ -2,6 +2,7 @@ mod types;
 mod transformer;
 mod test;
 
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter, write};
 use crate::lexer::{BinOp, LogicalOp, MathOp, Token, TokenType};
 pub use crate::parser::types::PatternAction;
@@ -21,8 +22,7 @@ enum PAType {
 
 #[derive(Debug, PartialEq)]
 pub struct Program {
-    pub functions: Vec<Function>,
-    pub main: Function,
+    pub functions: HashMap<String, Function>,
     pub global_analysis: AnalysisResults,
 }
 
@@ -30,21 +30,28 @@ impl Program {
     #[cfg(test)]
     fn new_action_only(action: Stmt) -> Program {
         let body = transform(vec![], vec![], vec![PatternAction::new_action_only(action)]);
-        Program { main: Function::new("main function".to_string(), vec![], body), functions: vec![], global_analysis: AnalysisResults::new()}
+        let mut functions = HashMap::new();
+        functions.insert("main function".to_string(), Function::new("main function".to_string(), vec![], body));
+        Program { functions, global_analysis: AnalysisResults::new() }
     }
-    pub fn new(begins: Vec<Stmt>, ends: Vec<Stmt>, pas: Vec<PatternAction>, functions: Vec<Function>) -> Program {
+    pub fn new(begins: Vec<Stmt>, ends: Vec<Stmt>, pas: Vec<PatternAction>, parsed_functions: Vec<Function>) -> Program {
         let body = transform(begins, ends, pas);
         let main = Function::new("main function".to_string(), vec![], body);
-        Program { main, functions, global_analysis: AnalysisResults::new()}
+        let mut functions = HashMap::new();
+        functions.insert("main function".to_string(), main);
+        for func in parsed_functions {
+            functions.insert(func.name.clone(), func);
+        }
+        Program { functions, global_analysis: AnalysisResults::new() }
     }
 }
 
 impl Display for Program {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         for func in &self.functions {
-            write!(f, "{}\n", func)?;
+            write!(f, "{}\n", func.1)?;
         }
-        write!(f, "{}", self.main.body)
+        Ok(())
     }
 }
 
@@ -723,7 +730,7 @@ impl Parser {
 
                 if self.matches(&[TokenType::LeftBracket]) {
                     self.array_index(name)
-                } else if self.matches(&[TokenType::LeftParen]){
+                } else if self.matches(&[TokenType::LeftParen]) {
                     self.call(name)
                 } else {
                     Expr::Variable(name).into()
@@ -744,7 +751,7 @@ impl Parser {
     fn call(&mut self, target: String) -> TypedExpr {
         let mut args = vec![];
         loop {
-            if self.matches(&[TokenType::RightParen])  {
+            if self.matches(&[TokenType::RightParen]) {
                 break;
             }
             if self.peek().ttype() == TokenType::EOF {
@@ -752,7 +759,7 @@ impl Parser {
             }
             args.push(self.expression());
             if self.matches(&[TokenType::Comma]) {
-                continue
+                continue;
             } else {
                 self.consume(TokenType::RightParen, "Expected a right paren ')' after a function call");
                 break;

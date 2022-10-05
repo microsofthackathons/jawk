@@ -163,13 +163,14 @@ impl<'a, RuntimeT: Runtime> CodeGen<'a, RuntimeT> {
         self.define_all_globals(&prog)?;
 
         // Compile all non-main functions functions
-        for parser_func in &prog.functions {
-            let func = self.compile_function(parser_func, dump)?;
-            self.function_map.insert(parser_func.name.clone(), func);
-        }
+        // for (name, parser_func) in &prog.functions {
+        //     let func = self.compile_function(parser_func, dump)?;
+        //     self.function_map.insert(parser_func.name.clone(), func);
+        // }
 
         // Compile main program
-        self.compile_stmt(&prog.main.body)?;
+        let main = prog.functions.get("main function").expect("main function to exist");
+        self.compile_stmt(&main.body)?;
 
         // This is just so # strings allocated == # of strings freed which makes testing easier
         for var in prog.global_analysis.global_scalars.clone() {

@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
+use libc::{calloc, stat};
 use crate::parser::{Arg, ArgT, Program, ScalarType, Stmt, TypedExpr};
 use crate::{Expr, PrintableError};
-use crate::typing::types::{AnalysisResults, MapT, TypedFunc, TypedProgram};
+use crate::typing::types::{AnalysisResults, Call, CallArg, MapT, TypedFunc, TypedProgram};
 
 pub struct FunctionAnalysis {
     global_scalars: MapT,
@@ -31,22 +32,23 @@ fn get_arg<'a>(func_state: &'a mut FuncState, name: &str) -> Option<&'a mut Arg>
 
 struct FuncState<'a> {
     args: &'a mut [Arg],
+    calls: Vec<Call>,
 }
 
 impl FunctionAnalysis {
     pub fn analyze_program(mut self, mut prog: Program) -> Result<TypedProgram, PrintableError> {
-        for func in &prog.functions {
-            self.func_names.insert(func.name.clone());
+        for (name, _) in &prog.functions {
+            self.func_names.insert(name.clone());
         }
-        let mut state = FuncState { args: &mut prog.main.args };
-        self.analyze_stmt(&mut prog.main.body, &mut state)?;
-        let main = TypedFunc::new(prog.main);
 
-        let mut functions = vec![];
-        for mut func in prog.functions {
-            let mut fstate = FuncState { args: &mut func.args };
-            self.analyze_stmt(&mut func.body, &mut fstate)?;
-            functions.push(TypedFunc::new(func))
+        let mut functions = HashMap::new();
+        for (name, mut func) in prog.functions {
+            let calls = {
+                let mut fstate = FuncState { args: &mut func.args, calls: vec![] };
+                self.analyze_stmt(&mut func.body, &mut fstate)?;
+                fstate.calls
+            };
+            functions.insert(name, TypedFunc::new(func, calls));
         }
 
         let mut global_arrays = HashMap::new();
@@ -60,7 +62,7 @@ impl FunctionAnalysis {
             global_arrays,
         };
 
-        Ok(TypedProgram::new(main, functions, results))
+        Ok(TypedProgram::new(functions, results))
     }
     fn use_as_scalar(&mut self, var: &str, typ: ScalarType, func_state: &mut FuncState) -> Result<(), PrintableError> {
         if let Some(arg) = get_arg(func_state, var) {
@@ -177,7 +179,28 @@ impl FunctionAnalysis {
     fn analyze_expr(&mut self, expr: &mut TypedExpr, func_state: &mut FuncState, is_returned: bool) -> Result<(), PrintableError> {
         match &mut expr.expr {
             Expr::Call { args, target } => {
-                todo!("call")
+                for arg in args.iter_mut() {
+                    if let Expr::Variable(_str) = &arg.expr {} else {
+                        self.analyze_expr(arg, func_state, false)?;
+                    }
+                }
+                let call_args = args.iter_mut().map(|arg| {
+                    if let Expr::Variable(var_name) = &arg.expr {
+                        if let Some(arg_t) = get_arg(func_state, var_name) {
+                            CallArg::new(arg_t.typ, arg_t.name.clone())
+                        } else if self.global_arrays.contains(var_name) {
+                            CallArg::new(Some(ArgT::Array), var_name.clone())
+                        } else if self.global_scalars.get(var_name).is_some() {
+                            CallArg::new(Some(ArgT::Scalar), var_name.clone())
+                        } else {
+                            CallArg::new(None, var_name.clone())
+                        }
+                    } else {
+                        CallArg::new_expr(Some(ArgT::Scalar))
+                    }
+                });
+                let call = Call::new(target.to_string(), call_args.collect());
+                func_state.calls.push(call)
             }
             Expr::NumberF64(_) => {
                 expr.typ = ScalarType::Float;

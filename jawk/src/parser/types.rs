@@ -232,6 +232,12 @@ pub struct Arg {
     pub typ: Option<ArgT>,
 }
 
+impl Arg {
+    pub fn new<T: Into<String>>(name: T, typ: Option<ArgT>) -> Self {
+        Self { name: name.into(), typ }
+    }
+}
+
 impl Display for Arg {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let typ = match self.typ {
@@ -251,10 +257,10 @@ pub struct Function {
 }
 
 impl Function {
-    pub fn new(name: String, args: Vec<String>, body: Stmt) -> Self {
+    pub fn new<T: Into<String>>(name: T, args: Vec<T>, body: Stmt) -> Self {
         Function {
-            name,
-            args: args.into_iter().map(|arg| Arg { name: arg, typ: None }).collect(),
+            name: name.into(),
+            args: args.into_iter().map(|arg| Arg { name: arg.into(), typ: None }).collect(),
             body,
             return_type: ScalarType::Variable,
         }

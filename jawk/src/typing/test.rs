@@ -13,17 +13,23 @@ fn test_exception(program: &str, error_includes_msg: &str) {
 }
 
 #[cfg(test)]
-fn test_it(program: &str, expected: &str) {
-    fn strip(data: &str) -> String {
-        data.replace("\n", "")
-            .replace(" ", "")
-            .replace("\t", "")
-            .replace(";", "")
+fn strip(data: &str) -> String {
+    let data: String = data.replace("\n", "")
+        .replace(" ", "")
+        .replace("\t", "")
+        .replace(";", "")
+        .replace("\n", "");
+    println!("data1: {}", data);
+    if let Some(rest) = data.strip_prefix("functionmainfunction(){") {
+        return rest.strip_suffix("}").unwrap().to_string();
     }
-
+    data
+}
+#[cfg(test)]
+fn test_it(program: &str, expected: &str) {
     use crate::{lex, parse};
     let mut ast = analyze(parse(lex(program).unwrap())).unwrap();
-    println!("prog: {:?}", ast.main);
+    println!("prog: {:?}", ast);
     let result_clean = strip(&format!("{}", ast));
     let expected_clean = strip(expected);
     if result_clean != expected_clean {

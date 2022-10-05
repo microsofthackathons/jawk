@@ -1,3 +1,5 @@
+extern crate core;
+
 use crate::args::AwkArgs;
 use crate::lexer::lex;
 use crate::parser::{Expr, parse};
@@ -46,8 +48,8 @@ fn main() {
     };
 
     if args.debug {
-        println!("{:?}", program.main.body);
-        println!("{}", program.main.body);
+        println!("{:?}", program);
+        println!("{}", program);
     }
 
     // 5

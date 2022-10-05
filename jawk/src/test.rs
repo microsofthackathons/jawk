@@ -79,7 +79,7 @@ fn test_perf(interpreter: &str, prog: &str, oracle_output: &str, file: &PathBuf)
 fn test_it<S: AsRef<str>>(prog: &str, file: S, oracle_output: &str) {
     println!("Program:\n{}", prog);
     let mut program = analyze(parse(lex(&prog).unwrap())).unwrap();
-    println!("Ast:\n{}", &program.main.body);
+    println!("Ast:\n{}", &program);
 
     let temp_dir = tempdir().unwrap();
     let file_path = temp_dir.path().join("tmp");

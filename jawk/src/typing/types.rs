@@ -43,60 +43,66 @@ impl AnalysisResults {
     }
 }
 
+pub struct Call {
+    target: String,
+    args: Vec<CallArg>,
+}
 
-#[derive(Clone)]
+pub struct CallArg {
+    typ: Option<ArgT>,
+    is_arg: Option<String>,
+}
+
+impl CallArg {
+    pub fn new<T: Into<String>>(typ: Option<ArgT>, arg: T) -> Self {
+        CallArg { typ, is_arg: Some(arg.into()) }
+    }
+    pub fn new_expr(typ: Option<ArgT>) -> Self {
+        CallArg { typ, is_arg: None }
+    }
+}
+
+impl Call {
+    pub fn new<T: Into<String>>(target: T, args: Vec<CallArg>) -> Self {
+        Self { target: target.into(), args }
+    }
+}
+
 pub struct TypedFunc {
-    inner: Rc<RefCell<TypedFuncI>>,
+    pub func: Function,
+    pub callers: HashSet<TypedFunc>,
+    pub calls: Vec<Call>,
 }
 
 impl TypedFunc {
-    pub fn new(func: Function) -> Self {
-        Self { inner: Rc::new(RefCell::new(TypedFuncI::new(func))) }
-    }
-    pub fn done(mut self) -> Function {
-        let guard = RefCell::borrow(&self.inner);
-        guard.func.clone()
-    }
-}
-
-struct CallI {
-    target: TypedFunc,
-    args: Option<ArgT>,
-}
-
-type Call = Rc<RefCell<CallI>>;
-
-struct TypedFuncI {
-    pub func: Function,
-    callers: HashSet<TypedFunc>,
-    calls: Vec<Call>,
-}
-
-impl TypedFuncI {
-    pub fn new(func: Function) -> Self {
+    pub fn new(func: Function, calls: Vec<Call>) -> Self {
+        let len = func.args.len();
         Self {
             func,
             callers: HashSet::new(),
-            calls: vec![],
+            calls,
         }
+    }
+    pub fn done(self) -> Function {
+        self.func
     }
 }
 
 pub struct TypedProgram {
-    pub main: TypedFunc,
-    pub functions: Vec<TypedFunc>,
+    pub functions: HashMap<String, TypedFunc>,
     pub global_analysis: AnalysisResults,
 }
 
 impl TypedProgram {
-    pub fn new(main: TypedFunc, functions: Vec<TypedFunc>, results: AnalysisResults) -> Self {
-        Self { main, functions, global_analysis: results }
+    pub fn new(functions: HashMap<String, TypedFunc>, results: AnalysisResults) -> Self {
+        Self { functions, global_analysis: results }
     }
     pub fn done(self) -> Program {
         Program {
             global_analysis: self.global_analysis,
-            main: self.main.done(),
-            functions: self.functions.into_iter().map(|func| func.done()).collect(),
+            functions: self.functions.into_iter()
+                .map(|(name, func)| (name, func.func))
+                .collect(),
         }
     }
 }
