@@ -1,3 +1,5 @@
+## Active development here: [github.com/n8ta/jawk](https://github.com/n8ta/jawk)
+
 ## What is it?
 An (INCOMPLETE) jit compiled awk (jawk) implementation leveraging GNU libjit. The goal is the to be the fastest awk for all programs.
 
