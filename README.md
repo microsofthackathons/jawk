@@ -55,7 +55,7 @@ cargo run -- --debug 'BEGIN { print "this will print debug info including the AS
 17. Divide by 0 needs to print an error (tests for this will probably need to be bespoke)
 
 ## License
-GNU Libjit is GPLv2. Code written during the hackathon is not licensed.
+GNU Libjit is GPLv2. This repo is MIT licensed.
 
 ## Running the tests
 
